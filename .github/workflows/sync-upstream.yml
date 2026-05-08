@@ -47,3 +47,23 @@ jobs:
       - name: Push changes
         if: steps.check.outputs.has_updates == 'true'
         run: git push origin main
+
+      - name: Auto tag and release
+        if: steps.check.outputs.has_updates == 'true'
+        run: |
+          git fetch --tags
+          LATEST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+          if [ -z "$LATEST_TAG" ]; then
+            NEW_TAG="v0.7.0"
+          else
+            # Strip 'v' prefix, split by '.', bump patch
+            VERSION="${LATEST_TAG#v}"
+            MAJOR=$(echo "$VERSION" | cut -d. -f1)
+            MINOR=$(echo "$VERSION" | cut -d. -f2)
+            PATCH=$(echo "$VERSION" | cut -d. -f3)
+            PATCH=$((PATCH + 1))
+            NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+          fi
+          echo "Creating tag: $NEW_TAG"
+          git tag "$NEW_TAG"
+          git push origin "$NEW_TAG"
