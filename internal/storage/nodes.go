@@ -53,7 +53,8 @@ func (n Node) HasAnyTag(tags map[string]bool) bool {
 }
 
 // CheckNodeNameExists checks if a node name already exists for a user (excluding a specific node ID if provided).
-func (r *TrafficRepository) CheckNodeNameExists(ctx context.Context, nodeName, username string, excludeID int64) (bool, error) {
+// When protocol is snell or vless, the other one is excluded from the check (they are allowed to share names).
+func (r *TrafficRepository) CheckNodeNameExists(ctx context.Context, nodeName, username, protocol string, excludeID int64) (bool, error) {
 	if r == nil || r.db == nil {
 		return false, errors.New("traffic repository not initialized")
 	}
@@ -67,6 +68,12 @@ func (r *TrafficRepository) CheckNodeNameExists(ctx context.Context, nodeName, u
 	var count int
 	query := `SELECT COUNT(*) FROM nodes WHERE node_name = ? AND username = ?`
 	args := []interface{}{nodeName, username}
+
+	if strings.EqualFold(protocol, "snell") {
+		query += ` AND LOWER(protocol) != 'vless'`
+	} else if strings.EqualFold(protocol, "vless") {
+		query += ` AND LOWER(protocol) != 'snell'`
+	}
 
 	if excludeID > 0 {
 		query += ` AND id != ?`

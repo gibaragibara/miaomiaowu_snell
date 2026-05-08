@@ -252,16 +252,16 @@ func (h *nodesHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 校验节点名称是否重复（数据库层面）
-	exists, err := h.repo.CheckNodeNameExists(r.Context(), req.NodeName, username, 0)
+	// 校验节点名称是否重复（同协议下不允许重名）
+	exists, err := h.repo.CheckNodeNameExists(r.Context(), req.NodeName, username, req.Protocol, 0)
 	if err != nil {
 		logger.Info("[节点创建] 检查节点名称重复失败", "error", err)
 		writeError(w, http.StatusInternalServerError, errors.New("服务器错误"))
 		return
 	}
 	if exists {
-		logger.Info("[节点创建] 节点名称重复", "node_name", req.NodeName)
-		writeBadRequest(w, fmt.Sprintf("节点名称 \"%s\" 已存在，请使用其他名称", req.NodeName))
+		logger.Info("[节点创建] 节点名称重复", "node_name", req.NodeName, "protocol", req.Protocol)
+		writeBadRequest(w, fmt.Sprintf("节点名称 \"%s\" 已存在（%s协议），请使用其他名称", req.NodeName, req.Protocol))
 		return
 	}
 
@@ -410,16 +410,16 @@ func (h *nodesHandler) handleUpdate(w http.ResponseWriter, r *http.Request, idSe
 			return
 		}
 
-		// 校验节点名称是否重复（数据库层面）
-		exists, err := h.repo.CheckNodeNameExists(r.Context(), req.NodeName, username, id)
+		// 校验节点名称是否重复（同协议下不允许重名）
+		exists, err := h.repo.CheckNodeNameExists(r.Context(), req.NodeName, username, req.Protocol, id)
 		if err != nil {
 			logger.Info("[节点更新] 检查节点名称重复失败", "error", err)
 			writeError(w, http.StatusInternalServerError, errors.New("服务器错误"))
 			return
 		}
 		if exists {
-			logger.Info("[节点更新] 节点名称重复", "node_name", req.NodeName)
-			writeBadRequest(w, fmt.Sprintf("节点名称 \"%s\" 已存在，请使用其他名称", req.NodeName))
+			logger.Info("[节点更新] 节点名称重复", "node_name", req.NodeName, "protocol", req.Protocol)
+			writeBadRequest(w, fmt.Sprintf("节点名称 \"%s\" 已存在（%s协议），请使用其他名称", req.NodeName, req.Protocol))
 			return
 		}
 	}
