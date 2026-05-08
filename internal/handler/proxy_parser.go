@@ -1288,6 +1288,22 @@ func parseSnellURL(uri string) (map[string]any, error) {
 		node["tfo"] = true
 	}
 
+	if v := queryParams["shadow-tls-password"]; v != "" {
+		node["shadow-tls-password"] = v
+	}
+	if v := queryParams["shadow-tls-version"]; v != "" {
+		if ver, err := strconv.Atoi(v); err == nil {
+			node["shadow-tls-version"] = ver
+		}
+	}
+	if v := queryParams["shadow-tls-sni"]; v != "" {
+		node["shadow-tls-sni"] = v
+	}
+
+	if reuse := queryParams["reuse"]; reuse == "1" || reuse == "true" {
+		node["reuse"] = true
+	}
+
 	return node, nil
 }
 

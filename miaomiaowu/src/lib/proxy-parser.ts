@@ -776,6 +776,19 @@ function parseSnell(url: string): ProxyNode | null {
       node.tfo = true
     }
 
+    if (queryParams['shadow-tls-password']) {
+      node['shadow-tls-password'] = queryParams['shadow-tls-password']
+    }
+    if (queryParams['shadow-tls-version']) {
+      node['shadow-tls-version'] = parseInt(queryParams['shadow-tls-version'])
+    }
+    if (queryParams['shadow-tls-sni']) {
+      node['shadow-tls-sni'] = queryParams['shadow-tls-sni']
+    }
+    if (queryParams.reuse === '1' || queryParams.reuse === 'true') {
+      node.reuse = true
+    }
+
     return node
   } catch {
     return null
@@ -1389,6 +1402,18 @@ export function toClashProxy(node: ProxyNode): ClashProxy {
     }
     if (node.version) {
       clash.version = node.version
+    }
+    if (node['shadow-tls-password']) {
+      clash['shadow-tls-password'] = node['shadow-tls-password']
+    }
+    if (node['shadow-tls-version']) {
+      clash['shadow-tls-version'] = node['shadow-tls-version']
+    }
+    if (node['shadow-tls-sni']) {
+      clash['shadow-tls-sni'] = node['shadow-tls-sni']
+    }
+    if (node.reuse) {
+      clash.reuse = node.reuse
     }
   } else if (node.type === 'hysteria2' || node.type === 'hysteria' || node.type === 'anytls') {
     // Hysteria/Hysteria2/AnyTLS 使用 password
