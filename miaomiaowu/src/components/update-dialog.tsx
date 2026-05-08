@@ -51,8 +51,8 @@ function ReleaseNotes({ text }: { text: string }) {
         if (/^#{1,3} /.test(line)) {
           return <h4 key={i} className='font-semibold text-foreground mt-2 first:mt-0'>{processInline(line.replace(/^#{1,3} /, ''))}</h4>
         }
-        if (/^[*\-] /.test(line)) {
-          return <div key={i} className='flex gap-1.5 ml-1'><span className='shrink-0'>•</span><span className='min-w-0'>{processInline(line.replace(/^[*\-] /, ''))}</span></div>
+        if (/^[*-] /.test(line)) {
+          return <div key={i} className='flex gap-1.5 ml-1'><span className='shrink-0'>•</span><span className='min-w-0'>{processInline(line.replace(/^[*-] /, ''))}</span></div>
         }
         if (!line.trim()) return <div key={i} className='h-1' />
         return <p key={i}>{processInline(line)}</p>

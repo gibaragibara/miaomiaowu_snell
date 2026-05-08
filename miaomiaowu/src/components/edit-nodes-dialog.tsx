@@ -53,7 +53,7 @@ interface Node {
   node_name: string
   tag?: string
   tags?: string[]
-  [key: string]: any
+  [key: string]: string | string[] | number | boolean | undefined
 }
 
 // 拖拽类型定义
@@ -864,6 +864,7 @@ interface EditNodesDialogProps {
   showSpecialNodesAtBottom?: boolean  // 是否在底部显示特殊节点
   proxyProviderConfigs?: Array<{ id: number; name: string; process_mode?: string }>  // 代理集合配置列表
   // 保留旧的 props 以保持向后兼容，但不再使用
+  /* eslint-disable @typescript-eslint/no-explicit-any */
   draggedNode?: any
   onDragStart?: any
   onDragEnd?: any
@@ -880,6 +881,7 @@ interface EditNodesDialogProps {
   handleNodeDragEnd?: any
   activeGroupTitle?: any
   activeCard?: any
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 }
 
 export function EditNodesDialog({

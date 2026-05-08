@@ -396,7 +396,7 @@ function getStoredSelectedIds(): Set<number> {
       const ids = JSON.parse(stored) as number[]
       return new Set(ids)
     }
-  } catch {}
+  } catch { /* ignored */ }
   return new Set()
 }
 
@@ -408,7 +408,7 @@ function getStoredRenderMode(): RenderMode | null {
     if (stored === 'virtual' || stored === 'expanded') {
       return stored
     }
-  } catch {}
+  } catch { /* ignored */ }
   return null
 }
 
@@ -605,13 +605,13 @@ function NodesPage() {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY_PROTOCOL, selectedProtocol)
-    } catch {}
+    } catch { /* ignored */ }
   }, [selectedProtocol])
 
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY_TAG, tagFilter)
-    } catch {}
+    } catch { /* ignored */ }
   }, [tagFilter])
 
   // 当标签筛选变化时，自动填入对应的标签
@@ -626,14 +626,14 @@ function NodesPage() {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY_SELECTED_IDS, JSON.stringify(Array.from(selectedNodeIds)))
-    } catch {}
+    } catch { /* ignored */ }
   }, [selectedNodeIds])
 
   // 保存渲染模式到 localStorage
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY_RENDER_MODE, renderMode)
-    } catch {}
+    } catch { /* ignored */ }
   }, [renderMode])
 
   // 处理 URL 参数：打开导入卡片并聚焦订阅输入框

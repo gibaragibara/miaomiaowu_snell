@@ -96,7 +96,7 @@ function preprocessYaml(yamlStr: string): string {
     (match, prefix, value) => {
       // 检查是否是有效的 YAML 数组格式（如 [a, b, c] 或 [1, 2, 3]）
       // 如果看起来像节点名称（包含中文或特殊字符），则加引号
-      if (/[\u4e00-\u9fa5]/.test(value) || /\[[^\[\]]*[^\],\s\w.-][^\[\]]*\]?/.test(value)) {
+      if (/[\u4e00-\u9fa5]/.test(value) || /\[[^[\]]*[^\],\s\w.-][^[\]]*\]?/.test(value)) {
         return `${prefix}"${value.replace(/"/g, '\\"')}"`
       }
       return match

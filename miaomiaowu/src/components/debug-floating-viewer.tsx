@@ -81,10 +81,12 @@ export function DebugFloatingViewer() {
     },
   })
 
+  const { mutate: disableMutate } = disableMutation
+
   const handleClose = useCallback(() => {
-    disableMutation.mutate()
+    disableMutate()
     toast.success('Debug 日志已关闭')
-  }, [disableMutation])
+  }, [disableMutate])
 
   // 客户端每秒计时 + 5分钟自动关闭
   useEffect(() => {
