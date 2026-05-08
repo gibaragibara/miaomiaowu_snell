@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   miaomiaowu:
-    image: ghcr.io/iluobei/miaomiaowu:latest
+    image: ghcr.io/gibaragibara/miaomiaowu_snell:latest
     container_name: miaomiaowu
     restart: unless-stopped
     user: root

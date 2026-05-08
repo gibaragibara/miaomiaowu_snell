@@ -1224,6 +1224,73 @@ func parseAnytlsURL(uri string) (map[string]any, error) {
 	return node, nil
 }
 
+// parseSnellURL parses snell:// URL and returns Clash format
+// Format: snell://psk@server:port?version=3&obfs=http&obfs-host=example.com#name
+func parseSnellURL(uri string) (map[string]any, error) {
+	content := strings.TrimPrefix(uri, "snell://")
+	name := "Snell Node"
+	mainPart := content
+
+	if idx := strings.LastIndex(content, "#"); idx != -1 {
+		mainPart = content[:idx]
+		name, _ = url.QueryUnescape(content[idx+1:])
+	}
+
+	var queryParams map[string]string
+	if idx := strings.Index(mainPart, "?"); idx != -1 {
+		queryParams = parseQueryParams(mainPart[idx+1:])
+		mainPart = mainPart[:idx]
+	}
+	mainPart = strings.TrimSuffix(mainPart, "/")
+
+	atIdx := strings.LastIndex(mainPart, "@")
+	if atIdx == -1 {
+		return nil, fmt.Errorf("invalid snell url: missing @")
+	}
+
+	psk := mainPart[:atIdx]
+	serverPart := mainPart[atIdx+1:]
+
+	server, port := parseServerPortWithDefault(serverPart, 0)
+
+	node := map[string]any{
+		"name":   name,
+		"type":   "snell",
+		"server": server,
+		"port":   port,
+		"psk":    psk,
+	}
+
+	if v := queryParams["version"]; v != "" {
+		if ver, err := strconv.Atoi(v); err == nil {
+			node["version"] = ver
+			if ver >= 3 {
+				node["udp"] = true
+			}
+		}
+	}
+
+	obfs := queryParams["obfs"]
+	if obfs != "" {
+		obfsOpts := map[string]any{
+			"mode": obfs,
+		}
+		if host := queryParams["obfs-host"]; host != "" {
+			obfsOpts["host"] = host
+		}
+		if path := queryParams["obfs-uri"]; path != "" {
+			obfsOpts["path"] = path
+		}
+		node["obfs-opts"] = obfsOpts
+	}
+
+	if tfo := queryParams["tfo"]; tfo == "1" || tfo == "true" {
+		node["tfo"] = true
+	}
+
+	return node, nil
+}
+
 // parseWireGuardURL parses wireguard:// or wg:// URL
 func parseWireGuardURL(uri string) (map[string]any, error) {
 	content := regexp.MustCompile(`^(wireguard|wg)://`).ReplaceAllString(uri, "")
@@ -1350,6 +1417,8 @@ func ParseProxyURL(uri string) (map[string]any, error) {
 		return parseTuicURL(uri)
 	case strings.HasPrefix(uri, "anytls://"):
 		return parseAnytlsURL(uri)
+	case strings.HasPrefix(uri, "snell://"):
+		return parseSnellURL(uri)
 	case strings.HasPrefix(uri, "wireguard://"), strings.HasPrefix(uri, "wg://"):
 		return parseWireGuardURL(uri)
 	default:

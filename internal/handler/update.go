@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	githubRepo   = "iluobei/miaomiaowu"
+	githubRepo   = "gibaragibara/miaomiaowu_snell"
 	githubAPIURL = "https://api.github.com/repos/%s/releases/latest"
 )
 
