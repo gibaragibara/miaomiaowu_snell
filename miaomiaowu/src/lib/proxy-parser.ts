@@ -724,65 +724,63 @@ function parseHttp(url: string): ProxyNode | null {
  * 解析 Snell 协议
  * 格式: snell://password@server:port?obfs=http&obfs-host=example.com&version=4#name
  */
-// function parseSnell(url: string): ProxyNode | null {
-//   try {
-//     const content = url.substring('snell://'.length)
-//     let name = 'Snell Node'
-//     let mainPart = content
+function parseSnell(url: string): ProxyNode | null {
+  try {
+    const content = url.substring('snell://'.length)
+    let name = 'Snell Node'
+    let mainPart = content
 
-//     // 提取节点名称
-//     if (content.includes('#')) {
-//       const hashIndex = content.lastIndexOf('#')
-//       mainPart = content.substring(0, hashIndex)
-//       name = decodeURIComponent(content.substring(hashIndex + 1))
-//     }
+    if (content.includes('#')) {
+      const hashIndex = content.lastIndexOf('#')
+      mainPart = content.substring(0, hashIndex)
+      name = decodeURIComponent(content.substring(hashIndex + 1))
+    }
 
-//     // 提取查询参数
-//     let queryParams: Record<string, string> = {}
-//     let authAndServer = mainPart
-//     if (mainPart.includes('?')) {
-//       const [main, query] = mainPart.split('?')
-//       authAndServer = main
-//       queryParams = parseQueryString(query)
-//     }
+    let queryParams: Record<string, string> = {}
+    let authAndServer = mainPart
+    if (mainPart.includes('?')) {
+      const [main, query] = mainPart.split('?')
+      authAndServer = main
+      queryParams = parseQueryString(query)
+    }
 
-//     // 解析 password@server:port
-//     const atIndex = authAndServer.lastIndexOf('@')
-//     if (atIndex === -1) return null
+    const atIndex = authAndServer.lastIndexOf('@')
+    if (atIndex === -1) return null
 
-//     const password = authAndServer.substring(0, atIndex)
-//     const serverPart = authAndServer.substring(atIndex + 1)
+    const password = authAndServer.substring(0, atIndex)
+    const serverPart = authAndServer.substring(atIndex + 1)
 
-//     // 解析 server:port
-//     const colonIndex = serverPart.lastIndexOf(':')
-//     if (colonIndex === -1) return null
+    const colonIndex = serverPart.lastIndexOf(':')
+    if (colonIndex === -1) return null
 
-//     const server = serverPart.substring(0, colonIndex)
-//     const port = parseInt(serverPart.substring(colonIndex + 1)) || 0
+    const server = serverPart.substring(0, colonIndex)
+    const port = parseInt(serverPart.substring(colonIndex + 1)) || 0
 
-//     const node: ProxyNode = {
-//       name,
-//       type: 'snell',
-//       server,
-//       port,
-//       psk: password,  // Snell 使用 psk (pre-shared key)
-//       version: parseInt(queryParams.version) || 4  // 默认版本 4
-//     }
+    const node: ProxyNode = {
+      name,
+      type: 'snell',
+      server,
+      port,
+      psk: password,
+      version: parseInt(queryParams.version) || 4
+    }
 
-//     // 混淆设置
-//     if (queryParams.obfs && queryParams.obfs !== 'none') {
-//       node['obfs-opts'] = {
-//         mode: queryParams.obfs,  // http, tls
-//         host: queryParams['obfs-host'] || queryParams['obfs-hostname'] || ''
-//       }
-//     }
+    if (queryParams.obfs && queryParams.obfs !== 'none') {
+      node['obfs-opts'] = {
+        mode: queryParams.obfs,
+        host: queryParams['obfs-host'] || queryParams['obfs-hostname'] || ''
+      }
+    }
 
-//     return node
-//   } catch (e) {
-//     toast(`Parse Snell error: ${e instanceof Error ? e.message : String(e)}`)
-//     return null
-//   }
-// }
+    if (queryParams.tfo === '1' || queryParams.tfo === 'true') {
+      node.tfo = true
+    }
+
+    return node
+  } catch {
+    return null
+  }
+}
 
 /**
  * 解析通用协议 (trojan, vless, tuic, hysteria, hysteria2)
@@ -1285,8 +1283,8 @@ export function parseProxyUrl(url: string): ProxyNode | null {
     return parseSocks(url)
   } else if (url.startsWith('http://') || url.startsWith('https://')) {
     return parseHttp(url)
-  // } else if (url.startsWith('snell://')) {
-  //   return parseSnell(url)
+  } else if (url.startsWith('snell://')) {
+    return parseSnell(url)
   } else if (url.startsWith('trojan://')) {
     return parseGenericProtocol(url, 'trojan')
   } else if (url.startsWith('vless://')) {
@@ -1385,15 +1383,13 @@ export function toClashProxy(node: ProxyNode): ClashProxy {
     if (node.encryption) {
       clash.encryption = node.encryption
     }
-  // } else if (node.type === 'snell') {
-  //   // Snell 使用 psk (pre-shared key)
-  //   if (node.psk) {
-  //     clash.psk = node.psk
-  //   }
-  //   // Snell version
-  //   if (node.version) {
-  //     clash.version = node.version
-  //   }
+  } else if (node.type === 'snell') {
+    if (node.psk) {
+      clash.psk = node.psk
+    }
+    if (node.version) {
+      clash.version = node.version
+    }
   } else if (node.type === 'hysteria2' || node.type === 'hysteria' || node.type === 'anytls') {
     // Hysteria/Hysteria2/AnyTLS 使用 password
     if (node.password) {
