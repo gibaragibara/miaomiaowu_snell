@@ -666,7 +666,11 @@ func (h *SubscriptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		ext = ".yaml"
 	}
 
-	// clash 和 clashmeta 类型直接输出源文件, 不需要转换
+	// clash 和 clashmeta 输出源文件前过滤不支持的协议（如 snell）
+	if clientType == "clash" || clientType == "clashmeta" || clientType == "" {
+		data = filterUnsupportedProxiesFromYAML(data, clientType)
+	}
+
 	if clientType != "" && clientType != "clash" && clientType != "clashmeta" {
 		// Convert subscription using substore producers
 		convertedData, err := h.convertSubscription(r.Context(), data, clientType)
@@ -2087,6 +2091,50 @@ func createSubInfoNodes(config storage.SystemConfig, expireAt *time.Time, remain
 }
 
 // formatTrafficSize formats bytes to human readable format (GB/MB/KB)
+// filterUnsupportedProxiesFromYAML removes snell nodes from YAML for clash/clashmeta output
+func filterUnsupportedProxiesFromYAML(data []byte, clientType string) []byte {
+	var root yaml.Node
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return data
+	}
+	if len(root.Content) == 0 || root.Content[0].Kind != yaml.MappingNode {
+		return data
+	}
+
+	rootMap := root.Content[0]
+	for i := 0; i < len(rootMap.Content); i += 2 {
+		if rootMap.Content[i].Value != "proxies" {
+			continue
+		}
+		proxiesNode := rootMap.Content[i+1]
+		if proxiesNode.Kind != yaml.SequenceNode {
+			break
+		}
+
+		filtered := make([]*yaml.Node, 0, len(proxiesNode.Content))
+		for _, proxyNode := range proxiesNode.Content {
+			if proxyNode.Kind != yaml.MappingNode {
+				filtered = append(filtered, proxyNode)
+				continue
+			}
+			proxyType := yamlMapGet(proxyNode, "type")
+			if proxyType == "snell" {
+				continue
+			}
+			filtered = append(filtered, proxyNode)
+		}
+		proxiesNode.Content = filtered
+		break
+	}
+
+	out, err := MarshalYAMLWithIndent(&root)
+	if err != nil {
+		return data
+	}
+	fixed := RemoveUnicodeEscapeQuotes(string(out))
+	return []byte(fixed)
+}
+
 func formatTrafficSize(bytes int64) string {
 	if bytes <= 0 {
 		return "0B"
