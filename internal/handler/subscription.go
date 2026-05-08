@@ -2091,7 +2091,7 @@ func createSubInfoNodes(config storage.SystemConfig, expireAt *time.Time, remain
 }
 
 // formatTrafficSize formats bytes to human readable format (GB/MB/KB)
-// filterUnsupportedProxiesFromYAML removes snell nodes from YAML for clash/clashmeta output
+// filterUnsupportedProxiesFromYAML removes snell nodes from YAML proxies and proxy-groups for clash/clashmeta output
 func filterUnsupportedProxiesFromYAML(data []byte, clientType string) []byte {
 	var root yaml.Node
 	if err := yaml.Unmarshal(data, &root); err != nil {
@@ -2102,6 +2102,9 @@ func filterUnsupportedProxiesFromYAML(data []byte, clientType string) []byte {
 	}
 
 	rootMap := root.Content[0]
+	removedNames := make(map[string]bool)
+
+	// Pass 1: collect snell node names and filter proxies
 	for i := 0; i < len(rootMap.Content); i += 2 {
 		if rootMap.Content[i].Value != "proxies" {
 			continue
@@ -2119,12 +2122,51 @@ func filterUnsupportedProxiesFromYAML(data []byte, clientType string) []byte {
 			}
 			proxyType := yamlMapGet(proxyNode, "type")
 			if proxyType == "snell" {
+				name := yamlMapGet(proxyNode, "name")
+				if name != "" {
+					removedNames[name] = true
+				}
 				continue
 			}
 			filtered = append(filtered, proxyNode)
 		}
 		proxiesNode.Content = filtered
 		break
+	}
+
+	// Pass 2: remove snell node names from proxy-groups
+	if len(removedNames) > 0 {
+		for i := 0; i < len(rootMap.Content); i += 2 {
+			if rootMap.Content[i].Value != "proxy-groups" {
+				continue
+			}
+			groupsNode := rootMap.Content[i+1]
+			if groupsNode.Kind != yaml.SequenceNode {
+				break
+			}
+			for _, groupNode := range groupsNode.Content {
+				if groupNode.Kind != yaml.MappingNode {
+					continue
+				}
+				for j := 0; j < len(groupNode.Content); j += 2 {
+					if groupNode.Content[j].Value != "proxies" {
+						continue
+					}
+					proxiesList := groupNode.Content[j+1]
+					if proxiesList.Kind != yaml.SequenceNode {
+						continue
+					}
+					filtered := make([]*yaml.Node, 0, len(proxiesList.Content))
+					for _, nameNode := range proxiesList.Content {
+						if !removedNames[nameNode.Value] {
+							filtered = append(filtered, nameNode)
+						}
+					}
+					proxiesList.Content = filtered
+				}
+			}
+			break
+		}
 	}
 
 	out, err := MarshalYAMLWithIndent(&root)
