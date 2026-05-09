@@ -250,6 +250,10 @@ MIT License
 <details>
 <summary>更新日志</summary>
 
+### v0.6.7 (2026-05-09)
+- 🌈 增加clash->shadowrocket客户端类型
+- 🌈 增加覆写脚本功能[#33](https://github.com/iluobei/miaomiaowu/issues/33)
+- 🛠️ fix:stash dns nameserver-policy 配置错误
 ### v0.6.6 (2026-05-07)
 - 🌈 静态资源使用相对路径支持子路径代理[#78](https://github.com/iluobei/miaomiaowu/issues/78)
 - 🌈 支持naive与mieru协议[#76](https://github.com/iluobei/miaomiaowu/issues/76)
