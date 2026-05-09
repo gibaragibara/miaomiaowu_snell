@@ -276,6 +276,7 @@ type SystemConfig struct {
 	SubInfoTrafficPrefix    string // Prefix for remaining traffic node, default "⌛剩余流量"
 	EnableShortLink         bool   // 启用短链接（全局设置）
 	EnableSubTrafficHeader  bool   // 启用订阅响应头流量信息
+	EnableOverrideScripts   bool   // 启用覆写脚本功能
 }
 
 // ExternalSubscription represents an external subscription URL imported by user.
@@ -294,6 +295,19 @@ type ExternalSubscription struct {
 	TrafficMode string     // 流量统计方式: "download", "upload", "both", "none"
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+// OverrideScript represents a JavaScript override script.
+type OverrideScript struct {
+	ID        int64
+	Username  string
+	Name      string
+	Hook      string // "post_fetch" | "pre_save_nodes"
+	Content   string
+	Enabled   bool
+	SortOrder int
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // CustomRule represents a custom rule for DNS, rules, or rule-providers.
@@ -927,6 +941,9 @@ WHERE NOT EXISTS (SELECT 1 FROM system_config WHERE id = 1);
 	if err := r.ensureSystemConfigColumn("sub_info_traffic_prefix", "TEXT NOT NULL DEFAULT '⌛剩余流量'"); err != nil {
 		return err
 	}
+	if err := r.ensureSystemConfigColumn("enable_override_scripts", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
 
 	// Add enable_short_link column to system_config table (default enabled)
 	if err := r.ensureSystemConfigColumn("enable_short_link", "INTEGER NOT NULL DEFAULT 1"); err != nil {
@@ -1004,6 +1021,26 @@ CREATE INDEX IF NOT EXISTS idx_custom_rule_applications_rule ON custom_rule_appl
 
 	if _, err := r.db.Exec(customRuleApplicationsSchema); err != nil {
 		return fmt.Errorf("migrate custom_rule_applications: %w", err)
+	}
+
+	// Override scripts table
+	const overrideScriptsSchema = `
+CREATE TABLE IF NOT EXISTS override_scripts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    name TEXT NOT NULL,
+    hook TEXT NOT NULL,
+    content TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_override_scripts_username ON override_scripts(username);
+CREATE INDEX IF NOT EXISTS idx_override_scripts_hook ON override_scripts(hook);
+`
+	if _, err := r.db.Exec(overrideScriptsSchema); err != nil {
+		return fmt.Errorf("migrate override_scripts: %w", err)
 	}
 
 	// Templates table for ACL4SSR rule configuration
@@ -4564,16 +4601,16 @@ func (r *TrafficRepository) DeleteProxyProviderConfig(ctx context.Context, id in
 func (r *TrafficRepository) GetSystemConfig(ctx context.Context) (SystemConfig, error) {
 	const query = `
 SELECT proxy_groups_source_url, client_compatibility_mode, silent_mode, silent_mode_timeout,
-       enable_sub_info_nodes, sub_info_expire_prefix, sub_info_traffic_prefix, COALESCE(enable_short_link, 1), COALESCE(enable_sub_traffic_header, 1)
+       enable_sub_info_nodes, sub_info_expire_prefix, sub_info_traffic_prefix, COALESCE(enable_short_link, 1), COALESCE(enable_sub_traffic_header, 1), COALESCE(enable_override_scripts, 0)
 FROM system_config
 WHERE id = 1
 `
 
 	var cfg SystemConfig
-	var compatibilityMode, silentMode, silentModeTimeout, enableSubInfoNodes, enableShortLinkInt, enableSubTrafficHeaderInt int
+	var compatibilityMode, silentMode, silentModeTimeout, enableSubInfoNodes, enableShortLinkInt, enableSubTrafficHeaderInt, enableOverrideScriptsInt int
 	err := r.db.QueryRowContext(ctx, query).Scan(
 		&cfg.ProxyGroupsSourceURL, &compatibilityMode, &silentMode, &silentModeTimeout,
-		&enableSubInfoNodes, &cfg.SubInfoExpirePrefix, &cfg.SubInfoTrafficPrefix, &enableShortLinkInt, &enableSubTrafficHeaderInt,
+		&enableSubInfoNodes, &cfg.SubInfoExpirePrefix, &cfg.SubInfoTrafficPrefix, &enableShortLinkInt, &enableSubTrafficHeaderInt, &enableOverrideScriptsInt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -4598,6 +4635,7 @@ WHERE id = 1
 	cfg.EnableSubInfoNodes = enableSubInfoNodes != 0
 	cfg.EnableShortLink = enableShortLinkInt != 0
 	cfg.EnableSubTrafficHeader = enableSubTrafficHeaderInt != 0
+	cfg.EnableOverrideScripts = enableOverrideScriptsInt != 0
 	if cfg.SubInfoExpirePrefix == "" {
 		cfg.SubInfoExpirePrefix = "📅过期时间"
 	}
@@ -4621,6 +4659,7 @@ SET proxy_groups_source_url = ?,
     sub_info_traffic_prefix = ?,
     enable_short_link = ?,
     enable_sub_traffic_header = ?,
+    enable_override_scripts = ?,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = 1
 `
@@ -4649,6 +4688,10 @@ WHERE id = 1
 	if cfg.EnableSubTrafficHeader {
 		enableSubTrafficHeader = 1
 	}
+	enableOverrideScripts := 0
+	if cfg.EnableOverrideScripts {
+		enableOverrideScripts = 1
+	}
 	subInfoExpirePrefix := cfg.SubInfoExpirePrefix
 	if subInfoExpirePrefix == "" {
 		subInfoExpirePrefix = "📅过期时间"
@@ -4660,7 +4703,7 @@ WHERE id = 1
 
 	result, err := r.db.ExecContext(ctx, updateStmt,
 		cfg.ProxyGroupsSourceURL, compatibilityMode, silentMode, silentModeTimeout,
-		enableSubInfoNodes, subInfoExpirePrefix, subInfoTrafficPrefix, enableShortLink, enableSubTrafficHeader,
+		enableSubInfoNodes, subInfoExpirePrefix, subInfoTrafficPrefix, enableShortLink, enableSubTrafficHeader, enableOverrideScripts,
 	)
 	if err != nil {
 		return fmt.Errorf("update system config: %w", err)
@@ -4675,16 +4718,82 @@ WHERE id = 1
 	if rowsAffected == 0 {
 		const insertStmt = `
 INSERT INTO system_config (id, proxy_groups_source_url, client_compatibility_mode, silent_mode, silent_mode_timeout,
-                           enable_sub_info_nodes, sub_info_expire_prefix, sub_info_traffic_prefix, enable_short_link, enable_sub_traffic_header)
-VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                           enable_sub_info_nodes, sub_info_expire_prefix, sub_info_traffic_prefix, enable_short_link, enable_sub_traffic_header, enable_override_scripts)
+VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 		if _, err := r.db.ExecContext(ctx, insertStmt,
 			cfg.ProxyGroupsSourceURL, compatibilityMode, silentMode, silentModeTimeout,
-			enableSubInfoNodes, subInfoExpirePrefix, subInfoTrafficPrefix, enableShortLink, enableSubTrafficHeader,
+			enableSubInfoNodes, subInfoExpirePrefix, subInfoTrafficPrefix, enableShortLink, enableSubTrafficHeader, enableOverrideScripts,
 		); err != nil {
 			return fmt.Errorf("insert system config: %w", err)
 		}
 	}
 
 	return nil
+}
+
+// --- Override Scripts CRUD ---
+
+func (r *TrafficRepository) ListOverrideScripts(ctx context.Context, username string, hook string) ([]OverrideScript, error) {
+	query := `SELECT id, username, name, hook, content, enabled, sort_order, created_at, updated_at
+		FROM override_scripts WHERE username = ?`
+	args := []interface{}{username}
+
+	if hook != "" {
+		query += " AND hook = ?"
+		args = append(args, hook)
+	}
+	query += " ORDER BY sort_order ASC, id ASC"
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var scripts []OverrideScript
+	for rows.Next() {
+		var s OverrideScript
+		if err := rows.Scan(&s.ID, &s.Username, &s.Name, &s.Hook, &s.Content, &s.Enabled, &s.SortOrder, &s.CreatedAt, &s.UpdatedAt); err != nil {
+			return nil, err
+		}
+		scripts = append(scripts, s)
+	}
+	return scripts, rows.Err()
+}
+
+func (r *TrafficRepository) GetOverrideScript(ctx context.Context, id int64, username string) (*OverrideScript, error) {
+	var s OverrideScript
+	err := r.db.QueryRowContext(ctx,
+		`SELECT id, username, name, hook, content, enabled, sort_order, created_at, updated_at
+		FROM override_scripts WHERE id = ? AND username = ?`, id, username).Scan(
+		&s.ID, &s.Username, &s.Name, &s.Hook, &s.Content, &s.Enabled, &s.SortOrder, &s.CreatedAt, &s.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+func (r *TrafficRepository) CreateOverrideScript(ctx context.Context, s *OverrideScript) (int64, error) {
+	result, err := r.db.ExecContext(ctx,
+		`INSERT INTO override_scripts (username, name, hook, content, enabled, sort_order) VALUES (?, ?, ?, ?, ?, ?)`,
+		s.Username, s.Name, s.Hook, s.Content, s.Enabled, s.SortOrder)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
+}
+
+func (r *TrafficRepository) UpdateOverrideScript(ctx context.Context, s *OverrideScript) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE override_scripts SET name = ?, hook = ?, content = ?, enabled = ?, sort_order = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ? AND username = ?`,
+		s.Name, s.Hook, s.Content, s.Enabled, s.SortOrder, s.ID, s.Username)
+	return err
+}
+
+func (r *TrafficRepository) DeleteOverrideScript(ctx context.Context, id int64, username string) error {
+	_, err := r.db.ExecContext(ctx,
+		`DELETE FROM override_scripts WHERE id = ? AND username = ?`, id, username)
+	return err
 }

@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 
 import { DataTable } from '@/components/data-table'
 import type { DataTableColumn } from '@/components/data-table'
@@ -82,6 +83,15 @@ function CustomRulesPage() {
 	const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
 	const [isRuleProviderConfirmOpen, setIsRuleProviderConfirmOpen] = useState(false)
 	const [pendingRuleProviderData, setPendingRuleProviderData] = useState<RuleFormData | null>(null)
+
+	const { data: userConfig } = useQuery<{ enable_override_scripts: boolean }>({
+		queryKey: ['user-config'],
+		queryFn: async () => {
+			const response = await api.get('/api/user/config')
+			return response.data
+		},
+		staleTime: 5 * 60 * 1000,
+	})
 
 	// Fetch rules
 	const { data: rules = [], isLoading } = useQuery<CustomRule[]>({
@@ -422,15 +432,22 @@ function CustomRulesPage() {
 			<div className='space-y-6'>
 				<div className='flex items-center justify-between'>
 					<div>
-						<h1 className='text-3xl font-bold'>自定义规则</h1>
+						<h1 className='text-3xl font-bold'>覆写管理</h1>
 						<p className='text-muted-foreground mt-2'>
 							管理 DNS、规则和规则集的自定义配置
 						</p>
 					</div>
-					<Button onClick={handleCreate}>
-						<Plus className='mr-2 h-4 w-4' />
-						新建规则
-					</Button>
+					<div className='flex gap-2'>
+						{userConfig?.enable_override_scripts && (
+							<Link to='/custom-rules/scripts'>
+								<Button variant='outline'>覆写脚本</Button>
+							</Link>
+						)}
+						<Button onClick={handleCreate}>
+							<Plus className='mr-2 h-4 w-4' />
+							新建规则
+						</Button>
+					</div>
 				</div>
 
 				<Card>

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -17,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"miaomiaowu/internal/scriptengine"
 	"miaomiaowu/internal/storage"
 	"miaomiaowu/internal/util"
 
@@ -42,6 +44,9 @@ type subscriptionCacheEntry struct {
 }
 
 var subscriptionCache = sync.Map{} // map[string]*subscriptionCacheEntry (url -> entry)
+
+// overrideScriptRepo is set by NewProxyProviderServeHandler for script execution
+var overrideScriptRepo *storage.TrafficRepository
 
 // InvalidateSubscriptionContentCache 失效指定URL的订阅内容缓存
 func InvalidateSubscriptionContentCache(url string) {
@@ -102,6 +107,8 @@ func NewProxyProviderServeHandler(repo *storage.TrafficRepository) http.Handler 
 	if repo == nil {
 		panic("proxy provider serve handler requires repository")
 	}
+
+	overrideScriptRepo = repo
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		clientIP := GetClientIP(r)
@@ -1635,6 +1642,28 @@ func FetchAndFilterProxiesYAML(sub *storage.ExternalSubscription, config *storag
 		applyOverridesToNode(filteredProxiesNode, config.Override)
 	}
 
+	// 执行覆写脚本（pre_save_nodes 钩子）
+	if overrideScriptRepo != nil && config.Username != "" {
+		if sysCfg, err := overrideScriptRepo.GetSystemConfig(context.Background()); err == nil && sysCfg.EnableOverrideScripts {
+			scripts, _ := overrideScriptRepo.ListOverrideScripts(context.Background(), config.Username, "pre_save_nodes")
+			for _, s := range scripts {
+				if !s.Enabled {
+					continue
+				}
+				proxies := yamlNodeToProxies(filteredProxiesNode)
+				if len(proxies) == 0 {
+					continue
+				}
+				modified, err := scriptengine.RunPreSaveNodes(context.Background(), s.Content, proxies)
+				if err != nil {
+					logger.Info("[OverrideScript] pre_save_nodes 脚本执行失败", "script", s.Name, "error", err)
+					continue
+				}
+				filteredProxiesNode = proxiesToYamlNode(modified)
+			}
+		}
+	}
+
 	// Reorder proxy fields (name, type, server, port first)
 	reorderProxiesNode(filteredProxiesNode)
 
@@ -2035,6 +2064,56 @@ func applyOverridesToNode(proxiesNode *yaml.Node, overrideJSON string) {
 			util.SetNodeField(proxyNode, key, value)
 		}
 	}
+}
+
+// yamlNodeToProxies converts a yaml sequence node of proxies to []map[string]interface{}
+func yamlNodeToProxies(node *yaml.Node) []map[string]interface{} {
+	if node == nil || node.Kind != yaml.SequenceNode {
+		return nil
+	}
+	var proxies []map[string]interface{}
+	for _, proxyNode := range node.Content {
+		if proxyNode.Kind != yaml.MappingNode {
+			continue
+		}
+		m := make(map[string]interface{})
+		for i := 0; i < len(proxyNode.Content)-1; i += 2 {
+			key := proxyNode.Content[i].Value
+			val := proxyNode.Content[i+1]
+			switch val.Kind {
+			case yaml.ScalarNode:
+				m[key] = val.Value
+			case yaml.SequenceNode:
+				var arr []interface{}
+				for _, item := range val.Content {
+					arr = append(arr, item.Value)
+				}
+				m[key] = arr
+			case yaml.MappingNode:
+				sub := make(map[string]interface{})
+				for j := 0; j < len(val.Content)-1; j += 2 {
+					sub[val.Content[j].Value] = val.Content[j+1].Value
+				}
+				m[key] = sub
+			}
+		}
+		proxies = append(proxies, m)
+	}
+	return proxies
+}
+
+// proxiesToYamlNode converts []map[string]interface{} back to a yaml sequence node
+func proxiesToYamlNode(proxies []map[string]interface{}) *yaml.Node {
+	seqNode := &yaml.Node{Kind: yaml.SequenceNode}
+	for _, proxy := range proxies {
+		var mapNode yaml.Node
+		data, _ := yaml.Marshal(proxy)
+		_ = yaml.Unmarshal(data, &mapNode)
+		if len(mapNode.Content) > 0 {
+			seqNode.Content = append(seqNode.Content, mapNode.Content[0])
+		}
+	}
+	return seqNode
 }
 
 // createEmptyCacheEntry 创建空缓存条目

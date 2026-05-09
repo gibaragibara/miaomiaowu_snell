@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"miaomiaowu/internal/auth"
+	"miaomiaowu/internal/scriptengine"
 	"miaomiaowu/internal/storage"
 	"miaomiaowu/internal/substore"
 
@@ -1290,6 +1291,23 @@ func (h *SubscriptionHandler) convertSubscription(ctx context.Context, yamlData 
 	config, err := yamlNodeToMap(&rootNode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert YAML node: %w", err)
+	}
+
+	// 执行覆写脚本（post_fetch 钩子）
+	if username := auth.UsernameFromContext(ctx); username != "" {
+		if sysCfg, err := h.repo.GetSystemConfig(ctx); err == nil && sysCfg.EnableOverrideScripts {
+			scripts, _ := h.repo.ListOverrideScripts(ctx, username, "post_fetch")
+			for _, s := range scripts {
+				if s.Enabled {
+					modified, err := scriptengine.RunPostFetch(ctx, s.Content, config)
+					if err != nil {
+						logger.Info("[OverrideScript] post_fetch 脚本执行失败", "script", s.Name, "error", err)
+						continue
+					}
+					config = modified
+				}
+			}
+		}
 	}
 
 	// 读取yaml中proxies属性的节点列表

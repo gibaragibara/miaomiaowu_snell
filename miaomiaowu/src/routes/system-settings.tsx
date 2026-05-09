@@ -42,6 +42,7 @@ interface UserConfig {
   sub_info_expire_prefix: string
   sub_info_traffic_prefix: string
   enable_sub_traffic_header: boolean
+  enable_override_scripts: boolean
 }
 
 export const Route = createFileRoute('/system-settings')({
@@ -76,6 +77,7 @@ function SystemSettingsPage() {
   const [subInfoExpirePrefix, setSubInfoExpirePrefix] = useState('📅过期时间')
   const [subInfoTrafficPrefix, setSubInfoTrafficPrefix] = useState('⌛剩余流量')
   const [enableSubTrafficHeader, setEnableSubTrafficHeader] = useState(true)
+  const [enableOverrideScripts, setEnableOverrideScripts] = useState(false)
 
   // Sync proxy group categories mutation
   const syncProxyGroupsMutation = useSyncProxyGroupCategories()
@@ -111,6 +113,7 @@ function SystemSettingsPage() {
       setSubInfoExpirePrefix(userConfig.sub_info_expire_prefix || '📅过期时间')
       setSubInfoTrafficPrefix(userConfig.sub_info_traffic_prefix || '⌛剩余流量')
       setEnableSubTrafficHeader(userConfig.enable_sub_traffic_header !== false)
+      setEnableOverrideScripts(userConfig.enable_override_scripts || false)
     }
   }, [userConfig])
 
@@ -143,6 +146,7 @@ function SystemSettingsPage() {
       setSubInfoExpirePrefix(variables.sub_info_expire_prefix)
       setSubInfoTrafficPrefix(variables.sub_info_traffic_prefix)
       setEnableSubTrafficHeader(variables.enable_sub_traffic_header)
+      setEnableOverrideScripts(variables.enable_override_scripts)
       toast.success('设置已更新')
     },
     onError: (error) => {
@@ -173,6 +177,7 @@ function SystemSettingsPage() {
       sub_info_expire_prefix: subInfoExpirePrefix,
       sub_info_traffic_prefix: subInfoTrafficPrefix,
       enable_sub_traffic_header: enableSubTrafficHeader,
+      enable_override_scripts: enableOverrideScripts,
       ...updates,
     })
   }
@@ -523,6 +528,29 @@ function SystemSettingsPage() {
                   />
                 </div>
 
+                {/* 覆写脚本 */}
+                <div className='flex items-center justify-between rounded-lg border p-3'>
+                  <div className='flex items-center gap-2'>
+                    <Label htmlFor='enable-override-scripts' className='cursor-pointer'>
+                      覆写脚本
+                    </Label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <CircleHelp className='h-4 w-4 text-muted-foreground cursor-help' />
+                      </TooltipTrigger>
+                      <TooltipContent side='top' className='max-w-xs'>
+                        <p>开启后，覆写管理页面将显示覆写脚本功能，可使用 JavaScript 脚本修改订阅配置或节点属性。</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <Switch
+                    id='enable-override-scripts'
+                    checked={enableOverrideScripts}
+                    onCheckedChange={(checked) => updateConfig({ enable_override_scripts: checked })}
+                    disabled={loadingConfig || updateConfigMutation.isPending}
+                  />
+                </div>
+
                 {/* 静默模式 */}
                 <div className='flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50 p-3 dark:border-orange-900 dark:bg-orange-950'>
                   <div className='flex items-center gap-2'>
@@ -542,6 +570,29 @@ function SystemSettingsPage() {
                     id='silent-mode'
                     checked={silentMode}
                     onCheckedChange={(checked) => updateConfig({ silent_mode: checked })}
+                    disabled={loadingConfig || updateConfigMutation.isPending}
+                  />
+                </div>
+
+                {/* 订阅响应头流量信息 */}
+                <div className='flex items-center justify-between rounded-lg border p-3'>
+                  <div className='flex items-center gap-2'>
+                    <Label htmlFor='enable-sub-traffic-header' className='cursor-pointer'>
+                      订阅响应头流量信息
+                    </Label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <CircleHelp className='h-4 w-4 text-muted-foreground cursor-help' />
+                      </TooltipTrigger>
+                      <TooltipContent side='top' className='max-w-xs'>
+                        <p>开启后，获取订阅时读取探针和外部订阅流量数据，并在响应头中写入 subscription-userinfo 信息。关闭后跳过流量读取，不写入流量响应头。</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <Switch
+                    id='enable-sub-traffic-header'
+                    checked={enableSubTrafficHeader}
+                    onCheckedChange={(checked) => updateConfig({ enable_sub_traffic_header: checked })}
                     disabled={loadingConfig || updateConfigMutation.isPending}
                   />
                 </div>
@@ -574,29 +625,6 @@ function SystemSettingsPage() {
                   />
                 </div>
               )}
-
-              {/* 订阅响应头流量信息 */}
-              <div className='mt-4 flex items-center justify-between rounded-lg border p-3'>
-                <div className='flex items-center gap-2'>
-                  <Label htmlFor='enable-sub-traffic-header' className='cursor-pointer'>
-                    订阅响应头流量信息
-                  </Label>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <CircleHelp className='h-4 w-4 text-muted-foreground cursor-help' />
-                    </TooltipTrigger>
-                    <TooltipContent side='top' className='max-w-xs'>
-                      <p>开启后，获取订阅时读取探针和外部订阅流量数据，并在响应头中写入 subscription-userinfo 信息。关闭后跳过流量读取，不写入流量响应头。</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-                <Switch
-                  id='enable-sub-traffic-header'
-                  checked={enableSubTrafficHeader}
-                  onCheckedChange={(checked) => updateConfig({ enable_sub_traffic_header: checked })}
-                  disabled={loadingConfig || updateConfigMutation.isPending}
-                />
-              </div>
 
               {/* 订阅信息节点 */}
               <div className='mt-4 space-y-3 rounded-lg border p-4'>
