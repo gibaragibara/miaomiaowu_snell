@@ -50,7 +50,7 @@ const adminNavLinks = [
     icon: FileStack,
   },
   {
-    title: '规则管理',
+    title: '覆写管理',
     to: '/custom-rules',
     icon: FileCode,
   },

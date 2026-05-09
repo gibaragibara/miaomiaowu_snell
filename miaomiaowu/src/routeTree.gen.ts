@@ -31,6 +31,7 @@ import { Route as SubscribeFilesIndexRouteImport } from './routes/subscribe-file
 import { Route as NodesIndexRouteImport } from './routes/nodes.index'
 import { Route as CustomRulesIndexRouteImport } from './routes/custom-rules.index'
 import { Route as SubscribeFilesCustomRouteImport } from './routes/subscribe-files.custom'
+import { Route as CustomRulesScriptsRouteImport } from './routes/custom-rules.scripts'
 
 const UsersRoute = UsersRouteImport.update({
   id: '/users',
@@ -142,6 +143,11 @@ const SubscribeFilesCustomRoute = SubscribeFilesCustomRouteImport.update({
   path: '/custom',
   getParentRoute: () => SubscribeFilesRoute,
 } as any)
+const CustomRulesScriptsRoute = CustomRulesScriptsRouteImport.update({
+  id: '/scripts',
+  path: '/scripts',
+  getParentRoute: () => CustomRulesRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -159,6 +165,7 @@ export interface FileRoutesByFullPath {
   '/system-settings': typeof SystemSettingsRoute
   '/templates': typeof TemplatesRouteWithChildren
   '/users': typeof UsersRoute
+  '/custom-rules/scripts': typeof CustomRulesScriptsRoute
   '/subscribe-files/custom': typeof SubscribeFilesCustomRoute
   '/custom-rules/': typeof CustomRulesIndexRoute
   '/nodes/': typeof NodesIndexRoute
@@ -178,6 +185,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/system-settings': typeof SystemSettingsRoute
   '/users': typeof UsersRoute
+  '/custom-rules/scripts': typeof CustomRulesScriptsRoute
   '/subscribe-files/custom': typeof SubscribeFilesCustomRoute
   '/custom-rules': typeof CustomRulesIndexRoute
   '/nodes': typeof NodesIndexRoute
@@ -203,6 +211,7 @@ export interface FileRoutesById {
   '/system-settings': typeof SystemSettingsRoute
   '/templates': typeof TemplatesRouteWithChildren
   '/users': typeof UsersRoute
+  '/custom-rules/scripts': typeof CustomRulesScriptsRoute
   '/subscribe-files/custom': typeof SubscribeFilesCustomRoute
   '/custom-rules/': typeof CustomRulesIndexRoute
   '/nodes/': typeof NodesIndexRoute
@@ -229,6 +238,7 @@ export interface FileRouteTypes {
     | '/system-settings'
     | '/templates'
     | '/users'
+    | '/custom-rules/scripts'
     | '/subscribe-files/custom'
     | '/custom-rules/'
     | '/nodes/'
@@ -248,6 +258,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/system-settings'
     | '/users'
+    | '/custom-rules/scripts'
     | '/subscribe-files/custom'
     | '/custom-rules'
     | '/nodes'
@@ -272,6 +283,7 @@ export interface FileRouteTypes {
     | '/system-settings'
     | '/templates'
     | '/users'
+    | '/custom-rules/scripts'
     | '/subscribe-files/custom'
     | '/custom-rules/'
     | '/nodes/'
@@ -456,14 +468,23 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SubscribeFilesCustomRouteImport
       parentRoute: typeof SubscribeFilesRoute
     }
+    '/custom-rules/scripts': {
+      id: '/custom-rules/scripts'
+      path: '/scripts'
+      fullPath: '/custom-rules/scripts'
+      preLoaderRoute: typeof CustomRulesScriptsRouteImport
+      parentRoute: typeof CustomRulesRoute
+    }
   }
 }
 
 interface CustomRulesRouteChildren {
+  CustomRulesScriptsRoute: typeof CustomRulesScriptsRoute
   CustomRulesIndexRoute: typeof CustomRulesIndexRoute
 }
 
 const CustomRulesRouteChildren: CustomRulesRouteChildren = {
+  CustomRulesScriptsRoute: CustomRulesScriptsRoute,
   CustomRulesIndexRoute: CustomRulesIndexRoute,
 }
 
