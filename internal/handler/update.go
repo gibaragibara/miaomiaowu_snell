@@ -19,8 +19,9 @@ import (
 )
 
 const (
-	githubRepo   = "gibaragibara/miaomiaowu_snell"
-	githubAPIURL = "https://api.github.com/repos/%s/releases/latest"
+	githubRepo         = "gibaragibara/miaomiaowu_snell"
+	upstreamGithubRepo = "iluobei/miaomiaowu"
+	githubAPIURL       = "https://api.github.com/repos/%s/releases/latest"
 )
 
 // UpdateInfo contains version update information
@@ -261,15 +262,14 @@ func NewUpdateApplySSEHandler() http.Handler {
 	})
 }
 
-// checkLatestVersion fetches the latest release info from GitHub
-func checkLatestVersion() (*UpdateInfo, error) {
-	url := fmt.Sprintf(githubAPIURL, githubRepo)
-	logger.Debug("[系统更新] 检查更新", "url", url)
+func fetchLatestGitHubRelease(repo string) (*GitHubRelease, error) {
+	url := fmt.Sprintf(githubAPIURL, repo)
+	logger.Debug("[系统更新] 检查更新", "repo", repo, "url", url)
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		logger.Error("[系统更新] 创建请求失败", "error", err)
+		logger.Error("[系统更新] 创建请求失败", "repo", repo, "error", err)
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
@@ -277,20 +277,29 @@ func checkLatestVersion() (*UpdateInfo, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.Error("[系统更新] 请求GitHub API失败", "error", err)
+		logger.Error("[系统更新] 请求GitHub API失败", "repo", repo, "error", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		logger.Error("[系统更新] GitHub API返回错误", "status", resp.StatusCode)
+		logger.Error("[系统更新] GitHub API返回错误", "repo", repo, "status", resp.StatusCode)
 		return nil, fmt.Errorf("GitHub API 返回状态码: %d", resp.StatusCode)
 	}
 
 	var release GitHubRelease
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		logger.Error("[系统更新] 解析GitHub响应失败", "error", err)
+		logger.Error("[系统更新] 解析GitHub响应失败", "repo", repo, "error", err)
 		return nil, fmt.Errorf("解析 GitHub 响应失败: %w", err)
+	}
+	return &release, nil
+}
+
+// checkLatestVersion fetches the latest release info from GitHub
+func checkLatestVersion() (*UpdateInfo, error) {
+	release, err := fetchLatestGitHubRelease(githubRepo)
+	if err != nil {
+		return nil, err
 	}
 	logger.Debug("[系统更新] 获取到最新版本", "tag", release.TagName)
 
@@ -309,6 +318,12 @@ func checkLatestVersion() (*UpdateInfo, error) {
 
 	latestVersion := strings.TrimPrefix(release.TagName, "v")
 	hasUpdate := compareVersions(version.Version, latestVersion)
+	releaseNotes := release.Body
+	if upstreamRelease, err := fetchLatestGitHubRelease(upstreamGithubRepo); err == nil && strings.TrimSpace(upstreamRelease.Body) != "" {
+		releaseNotes = upstreamRelease.Body
+	} else if err != nil {
+		logger.Warn("[系统更新] 获取上游更新日志失败，使用当前发布说明", "error", err)
+	}
 
 	return &UpdateInfo{
 		CurrentVersion: version.Version,
@@ -316,7 +331,7 @@ func checkLatestVersion() (*UpdateInfo, error) {
 		HasUpdate:      hasUpdate,
 		ReleaseURL:     release.HTMLURL,
 		DownloadURL:    downloadURL,
-		ReleaseNotes:   release.Body,
+		ReleaseNotes:   releaseNotes,
 	}, nil
 }
 
