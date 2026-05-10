@@ -89,6 +89,16 @@ jobs:
           cache: 'npm'
           cache-dependency-path: miaomiaowu/package-lock.json
 
+      - name: Set version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$VERSION" = "$GITHUB_REF_NAME" ]; then
+            VERSION=$(node -p "require('./miaomiaowu/package.json').version")
+          fi
+          export VERSION
+          perl -0pi -e 's/const CURRENT_VERSION = '\''.*'\''/const CURRENT_VERSION = '\''$ENV{VERSION}'\''/' miaomiaowu/src/hooks/use-version-check.ts
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
       - name: Install frontend dependencies
         run: |
           cd miaomiaowu
@@ -105,7 +115,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          go build -trimpath -ldflags="-s -w" -o build/${{ matrix.output }} ./cmd/server
+          go build -trimpath -ldflags="-s -w -X miaomiaowu/internal/version.Version=${VERSION}" -o build/${{ matrix.output }} ./cmd/server
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -124,6 +134,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$VERSION" = "$GITHUB_REF_NAME" ]; then
+            VERSION="0.6.7"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -157,6 +175,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

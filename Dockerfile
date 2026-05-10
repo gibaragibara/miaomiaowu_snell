@@ -1,6 +1,8 @@
 # Build stage for frontend
 FROM node:20-slim AS frontend-builder
 
+ARG VERSION=0.6.7
+
 WORKDIR /app
 
 # Copy frontend package files
@@ -12,6 +14,7 @@ RUN npm ci
 
 # Copy frontend source
 COPY miaomiaowu/ ./
+RUN VERSION="${VERSION}" node -e 'const fs=require("fs"); const p="src/hooks/use-version-check.ts"; let s=fs.readFileSync(p,"utf8"); s=s.replace(/const CURRENT_VERSION = .*/, "const CURRENT_VERSION = \"" + process.env.VERSION + "\""); fs.writeFileSync(p,s)'
 
 # Build frontend (will output to ../internal/web/dist)
 RUN npm run build
@@ -22,6 +25,7 @@ FROM golang:1.24-bookworm AS backend-builder
 # Declare build arguments for multi-platform support
 ARG TARGETOS
 ARG TARGETARCH
+ARG VERSION=0.6.7
 
 WORKDIR /app
 
@@ -48,7 +52,7 @@ COPY --from=frontend-builder /app/internal/web/dist ./internal/web/dist
 # Use TARGETOS and TARGETARCH for multi-platform builds
 RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
     -trimpath \
-    -ldflags="-s -w" \
+    -ldflags="-s -w -X miaomiaowu/internal/version.Version=${VERSION}" \
     -o /app/server \
     ./cmd/server
 
