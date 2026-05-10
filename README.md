@@ -250,6 +250,11 @@ MIT License
 <details>
 <summary>更新日志</summary>
 
+### v0.6.8 (2026-05-10)
+- 🌈 优化发布流程
+- 🛠️ fix:shadowrocket配置导入失败
+- 🌈 增加tg通知#67
+- 🛠️ fix:自定义脚本不生效
 ### v0.6.7 (2026-05-09)
 - 🌈 增加clash->shadowrocket客户端类型
 - 🌈 增加覆写脚本功能[#33](https://github.com/iluobei/miaomiaowu/issues/33)

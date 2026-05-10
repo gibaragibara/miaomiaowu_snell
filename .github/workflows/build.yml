@@ -1,6 +1,9 @@
 name: Build and Release
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
   push:
     tags:
@@ -139,7 +142,7 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           if [ "$VERSION" = "$GITHUB_REF_NAME" ]; then
-            VERSION="0.6.7"
+            VERSION=$(grep -m1 '"version"' miaomiaowu/package.json | sed -E 's/.*"version": "([^"]+)".*/\1/')
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
