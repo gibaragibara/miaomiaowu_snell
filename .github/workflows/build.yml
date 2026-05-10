@@ -189,13 +189,24 @@ jobs:
           # 使用通配符更简洁
           sha256sum mmw-* > checksums.txt
 
+      - name: Fetch upstream release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh api repos/iluobei/miaomiaowu/releases/latest --jq '.body // ""' > upstream-release-notes.md; then
+            echo "Upstream release notes unavailable." > upstream-release-notes.md
+          fi
+          if [ ! -s upstream-release-notes.md ]; then
+            echo "Upstream release notes unavailable." > upstream-release-notes.md
+          fi
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }} # 显式指定 Tag 名字
           draft: false
           prerelease: false
-          generate_release_notes: true
+          body_path: upstream-release-notes.md
           make_latest: true   # 强制设为 Latest，有助于 Finalizing 成功
           files: |
             release/mmw-linux-amd64
