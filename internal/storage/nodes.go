@@ -99,7 +99,7 @@ func (r *TrafficRepository) ListNodes(ctx context.Context, username string) ([]N
 		return nil, errors.New("username is required")
 	}
 
-	rows, err := r.db.QueryContext(ctx, `SELECT id, username, raw_url, node_name, protocol, parsed_config, clash_config, enabled, COALESCE(tag, 'personal'), COALESCE(original_server, ''), COALESCE(probe_server, ''), COALESCE(tags, '[]'), created_at, updated_at FROM nodes WHERE username = ? ORDER BY created_at DESC`, username)
+	rows, err := r.db.QueryContext(ctx, `SELECT id, username, raw_url, node_name, protocol, parsed_config, clash_config, enabled, COALESCE(tag, 'personal'), COALESCE(original_server, ''), COALESCE(probe_server, ''), COALESCE(tags, '[]'), chain_proxy_node_id, created_at, updated_at FROM nodes WHERE username = ? ORDER BY created_at DESC`, username)
 	if err != nil {
 		return nil, fmt.Errorf("list nodes: %w", err)
 	}
@@ -110,7 +110,7 @@ func (r *TrafficRepository) ListNodes(ctx context.Context, username string) ([]N
 		var node Node
 		var enabled int
 		var tagsJSON string
-		if err := rows.Scan(&node.ID, &node.Username, &node.RawURL, &node.NodeName, &node.Protocol, &node.ParsedConfig, &node.ClashConfig, &enabled, &node.Tag, &node.OriginalServer, &node.ProbeServer, &tagsJSON, &node.CreatedAt, &node.UpdatedAt); err != nil {
+		if err := rows.Scan(&node.ID, &node.Username, &node.RawURL, &node.NodeName, &node.Protocol, &node.ParsedConfig, &node.ClashConfig, &enabled, &node.Tag, &node.OriginalServer, &node.ProbeServer, &tagsJSON, &node.ChainProxyNodeID, &node.CreatedAt, &node.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan node: %w", err)
 		}
 		node.Enabled = enabled != 0
@@ -143,8 +143,8 @@ func (r *TrafficRepository) GetNode(ctx context.Context, id int64, username stri
 
 	var enabled int
 	var tagsJSON string
-	row := r.db.QueryRowContext(ctx, `SELECT id, username, raw_url, node_name, protocol, parsed_config, clash_config, enabled, COALESCE(tag, 'personal'), COALESCE(original_server, ''), COALESCE(probe_server, ''), COALESCE(tags, '[]'), created_at, updated_at FROM nodes WHERE id = ? AND username = ? LIMIT 1`, id, username)
-	if err := row.Scan(&node.ID, &node.Username, &node.RawURL, &node.NodeName, &node.Protocol, &node.ParsedConfig, &node.ClashConfig, &enabled, &node.Tag, &node.OriginalServer, &node.ProbeServer, &tagsJSON, &node.CreatedAt, &node.UpdatedAt); err != nil {
+	row := r.db.QueryRowContext(ctx, `SELECT id, username, raw_url, node_name, protocol, parsed_config, clash_config, enabled, COALESCE(tag, 'personal'), COALESCE(original_server, ''), COALESCE(probe_server, ''), COALESCE(tags, '[]'), chain_proxy_node_id, created_at, updated_at FROM nodes WHERE id = ? AND username = ? LIMIT 1`, id, username)
+	if err := row.Scan(&node.ID, &node.Username, &node.RawURL, &node.NodeName, &node.Protocol, &node.ParsedConfig, &node.ClashConfig, &enabled, &node.Tag, &node.OriginalServer, &node.ProbeServer, &tagsJSON, &node.ChainProxyNodeID, &node.CreatedAt, &node.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return node, ErrNodeNotFound
 		}
@@ -192,7 +192,7 @@ func (r *TrafficRepository) CreateNode(ctx context.Context, node Node) (Node, er
 		enabled = 1
 	}
 
-	res, err := r.db.ExecContext(ctx, `INSERT INTO nodes (username, raw_url, node_name, protocol, parsed_config, clash_config, enabled, tag, tags, original_server) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, node.Username, node.RawURL, node.NodeName, node.Protocol, node.ParsedConfig, node.ClashConfig, enabled, node.Tag, tagsJSON, node.OriginalServer)
+	res, err := r.db.ExecContext(ctx, `INSERT INTO nodes (username, raw_url, node_name, protocol, parsed_config, clash_config, enabled, tag, tags, original_server, chain_proxy_node_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, node.Username, node.RawURL, node.NodeName, node.Protocol, node.ParsedConfig, node.ClashConfig, enabled, node.Tag, tagsJSON, node.OriginalServer, node.ChainProxyNodeID)
 	if err != nil {
 		return Node{}, fmt.Errorf("create node: %w", err)
 	}
@@ -245,7 +245,7 @@ func (r *TrafficRepository) UpdateNode(ctx context.Context, node Node) (Node, er
 		enabled = 1
 	}
 
-	res, err := r.db.ExecContext(ctx, `UPDATE nodes SET raw_url = ?, node_name = ?, protocol = ?, parsed_config = ?, clash_config = ?, enabled = ?, tag = ?, tags = ?, original_server = ?, probe_server = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND username = ?`, node.RawURL, node.NodeName, node.Protocol, node.ParsedConfig, node.ClashConfig, enabled, node.Tag, tagsJSON, node.OriginalServer, node.ProbeServer, node.ID, node.Username)
+	res, err := r.db.ExecContext(ctx, `UPDATE nodes SET raw_url = ?, node_name = ?, protocol = ?, parsed_config = ?, clash_config = ?, enabled = ?, tag = ?, tags = ?, original_server = ?, probe_server = ?, chain_proxy_node_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND username = ?`, node.RawURL, node.NodeName, node.Protocol, node.ParsedConfig, node.ClashConfig, enabled, node.Tag, tagsJSON, node.OriginalServer, node.ProbeServer, node.ChainProxyNodeID, node.ID, node.Username)
 	if err != nil {
 		return Node{}, fmt.Errorf("update node: %w", err)
 	}
@@ -378,7 +378,7 @@ func (r *TrafficRepository) BatchCreateNodes(ctx context.Context, nodes []Node) 
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.PrepareContext(ctx, `INSERT INTO nodes (username, raw_url, node_name, protocol, parsed_config, clash_config, enabled, tag, tags, original_server) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	stmt, err := tx.PrepareContext(ctx, `INSERT INTO nodes (username, raw_url, node_name, protocol, parsed_config, clash_config, enabled, tag, tags, original_server, chain_proxy_node_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return nil, fmt.Errorf("prepare insert node: %w", err)
 	}
@@ -416,7 +416,7 @@ func (r *TrafficRepository) BatchCreateNodes(ctx context.Context, nodes []Node) 
 			enabled = 1
 		}
 
-		res, err := stmt.ExecContext(ctx, node.Username, node.RawURL, node.NodeName, node.Protocol, node.ParsedConfig, node.ClashConfig, enabled, node.Tag, tagsJSON, node.OriginalServer)
+		res, err := stmt.ExecContext(ctx, node.Username, node.RawURL, node.NodeName, node.Protocol, node.ParsedConfig, node.ClashConfig, enabled, node.Tag, tagsJSON, node.OriginalServer, node.ChainProxyNodeID)
 		if err != nil {
 			return nil, fmt.Errorf("insert node %d: %w", idx+1, err)
 		}
@@ -496,4 +496,59 @@ func (r *TrafficRepository) UpdateNodeProbeServer(ctx context.Context, nodeID in
 	}
 
 	return nil
+}
+
+// migrateChainProxyNodes migrates legacy chain proxy nodes that store dialer-proxy in clash_config.
+// It resolves the target node by name, sets chain_proxy_node_id, and removes dialer-proxy from clash_config.
+func (r *TrafficRepository) migrateChainProxyNodes() {
+	rows, err := r.db.Query(`SELECT id, username, node_name, clash_config FROM nodes WHERE chain_proxy_node_id IS NULL AND clash_config LIKE '%dialer-proxy%'`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	type migrationItem struct {
+		id          int64
+		username    string
+		nodeName    string
+		clashConfig string
+	}
+
+	var items []migrationItem
+	for rows.Next() {
+		var item migrationItem
+		if err := rows.Scan(&item.id, &item.username, &item.nodeName, &item.clashConfig); err != nil {
+			continue
+		}
+		items = append(items, item)
+	}
+
+	for _, item := range items {
+		var config map[string]interface{}
+		if err := json.Unmarshal([]byte(item.clashConfig), &config); err != nil {
+			continue
+		}
+
+		dialerProxy, ok := config["dialer-proxy"].(string)
+		if !ok || dialerProxy == "" {
+			continue
+		}
+
+		// Find target node by name within the same user
+		var targetID int64
+		err := r.db.QueryRow(`SELECT id FROM nodes WHERE username = ? AND node_name = ? AND id != ? LIMIT 1`, item.username, dialerProxy, item.id).Scan(&targetID)
+		if err != nil {
+			continue
+		}
+
+		// Remove dialer-proxy from clash_config
+		delete(config, "dialer-proxy")
+		newConfig, err := json.Marshal(config)
+		if err != nil {
+			continue
+		}
+
+		// Update the node
+		r.db.Exec(`UPDATE nodes SET chain_proxy_node_id = ?, clash_config = ?, parsed_config = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, targetID, string(newConfig), string(newConfig), item.id)
+	}
 }

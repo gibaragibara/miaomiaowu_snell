@@ -1941,11 +1941,26 @@ function SubscribeFilesPage() {
       // 处理链式代理：根据代理组的 dialerProxyGroup 配置添加 dialer-proxy
       if (parsed.proxies && Array.isArray(parsed.proxies)) {
         const nodeProtocolMap = new Map<string, string>()
+        const nodeIDToName = new Map<number, string>()
+        const nodeNameToChainID = new Map<string, number | null | undefined>()
         if (nodesQuery.data?.nodes) {
           nodesQuery.data.nodes.forEach((node: any) => {
             nodeProtocolMap.set(node.node_name, node.protocol)
+            nodeIDToName.set(node.id, node.node_name)
+            nodeNameToChainID.set(node.node_name, node.chain_proxy_node_id)
           })
         }
+
+        // 为有 chain_proxy_node_id 的链式代理节点注入 dialer-proxy
+        parsed.proxies.forEach((proxy: any) => {
+          const chainID = nodeNameToChainID.get(proxy.name)
+          if (chainID) {
+            const targetName = nodeIDToName.get(chainID)
+            if (targetName) {
+              proxy['dialer-proxy'] = targetName
+            }
+          }
+        })
 
         for (const group of proxyGroups) {
           if (!group.dialerProxyGroup) continue

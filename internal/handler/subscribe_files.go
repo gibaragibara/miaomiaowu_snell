@@ -1496,6 +1496,12 @@ func (h *subscribeFilesHandler) regenerateFromTemplate(ctx context.Context, user
 		logger.Info("[模板生成] 启用标签过滤", "selected_tags", subscribeFile.SelectedTags, "tag_count", len(subscribeFile.SelectedTags))
 	}
 
+	// 构建节点 ID -> 名称映射（用于链式代理解析）
+	nodeIDToName := make(map[int64]string, len(nodes))
+	for _, node := range nodes {
+		nodeIDToName[node.ID] = node.NodeName
+	}
+
 	// 将节点转换为 proxies 格式（[]map[string]any）
 	var proxies []map[string]any
 	enabledCount := 0
@@ -1518,6 +1524,12 @@ func (h *subscribeFilesHandler) regenerateFromTemplate(ctx context.Context, user
 		}
 		// 确保节点名称正确（使用数据库中的名称）
 		proxyConfig["name"] = node.NodeName
+		// 链式代理：根据 chain_proxy_node_id 注入 dialer-proxy
+		if node.ChainProxyNodeID != nil {
+			if targetName, ok := nodeIDToName[*node.ChainProxyNodeID]; ok {
+				proxyConfig["dialer-proxy"] = targetName
+			}
+		}
 		proxies = append(proxies, proxyConfig)
 	}
 	logger.Info("[模板生成] 从节点表获取代理节点", "total", len(nodes), "enabled", enabledCount, "filtered_by_tag", filteredByTagCount, "used", len(proxies))

@@ -84,6 +84,7 @@ type ParsedNode = {
   tags: string[]
   original_server: string
   probe_server: string
+  chain_proxy_node_id?: number | null
   created_at: string
   updated_at: string
 }
@@ -1891,28 +1892,28 @@ function NodesPage() {
         throw new Error('源节点配置解析失败')
       }
 
-      // 创建新的节点名称：源节点名称⇋目标节点名称
-      const newNodeName = `${sourceNode.node_name}⇋${targetNode.node_name}`
+      // 创建新的节点名称：源节点名称 | 目标节点名称
+      const newNodeName = `${sourceNode.node_name} | ${targetNode.node_name}`
 
-      // 添加 dialer-proxy 属性
+      // 不再在 clash_config 中设置 dialer-proxy，通过 chain_proxy_node_id 在订阅生成时动态注入
       const newClashConfig = {
         ...sourceClashConfig,
         name: newNodeName,
-        'dialer-proxy': targetNode.node_name,
       }
 
       // 创建新节点
       const response = await api.post('/api/admin/nodes', {
-        raw_url: sourceNode.raw_url, // 使用源节点的原始URL
+        raw_url: sourceNode.raw_url,
         node_name: newNodeName,
         protocol: `${sourceNode.protocol}⇋${targetNode.protocol}`,
-        parsed_config: JSON.stringify(newClashConfig), // 使用clash配置作为parsed配置
+        parsed_config: JSON.stringify(newClashConfig),
         clash_config: JSON.stringify(newClashConfig),
         enabled: true,
         tag: '链式代理',
         tags: ['链式代理'],
         original_server: sourceNode.original_server,
         probe_server: sourceNode.probe_server || '',
+        chain_proxy_node_id: targetNode.id,
       })
       return response.data
     },

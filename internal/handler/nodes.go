@@ -285,15 +285,16 @@ func (h *nodesHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	logger.Info("[节点创建] 校验通过 - 节点名称, 用户", "node_name", req.NodeName, "user", username)
 
 	node := storage.Node{
-		Username:     username,
-		RawURL:       req.RawURL,
-		NodeName:     req.NodeName,
-		Protocol:     req.Protocol,
-		ParsedConfig: req.ParsedConfig,
-		ClashConfig:  req.ClashConfig,
-		Enabled:      req.Enabled,
-		Tag:          req.Tag,
-		Tags:         req.Tags,
+		Username:         username,
+		RawURL:           req.RawURL,
+		NodeName:         req.NodeName,
+		Protocol:         req.Protocol,
+		ParsedConfig:     req.ParsedConfig,
+		ClashConfig:      req.ClashConfig,
+		Enabled:          req.Enabled,
+		Tag:              req.Tag,
+		Tags:             req.Tags,
+		ChainProxyNodeID: req.ChainProxyNodeID,
 	}
 	if len(node.Tags) == 0 && node.Tag != "" {
 		node.Tags = []string{node.Tag}
@@ -471,6 +472,7 @@ func (h *nodesHandler) handleUpdate(w http.ResponseWriter, r *http.Request, idSe
 		existing.Tag = req.Tags[0]
 	}
 	existing.Enabled = req.Enabled
+	existing.ChainProxyNodeID = req.ChainProxyNodeID
 
 	updated, err := h.repo.UpdateNode(r.Context(), existing)
 	if err != nil {
@@ -978,30 +980,32 @@ func (h *nodesHandler) handleBatchRename(w http.ResponseWriter, r *http.Request)
 }
 
 type nodeRequest struct {
-	RawURL       string   `json:"raw_url"`
-	NodeName     string   `json:"node_name"`
-	Protocol     string   `json:"protocol"`
-	ParsedConfig string   `json:"parsed_config"`
-	ClashConfig  string   `json:"clash_config"`
-	Enabled      bool     `json:"enabled"`
-	Tag          string   `json:"tag"`
-	Tags         []string `json:"tags"`
+	RawURL           string   `json:"raw_url"`
+	NodeName         string   `json:"node_name"`
+	Protocol         string   `json:"protocol"`
+	ParsedConfig     string   `json:"parsed_config"`
+	ClashConfig      string   `json:"clash_config"`
+	Enabled          bool     `json:"enabled"`
+	Tag              string   `json:"tag"`
+	Tags             []string `json:"tags"`
+	ChainProxyNodeID *int64   `json:"chain_proxy_node_id"`
 }
 
 type nodeDTO struct {
-	ID             int64     `json:"id"`
-	RawURL         string    `json:"raw_url"`
-	NodeName       string    `json:"node_name"`
-	Protocol       string    `json:"protocol"`
-	ParsedConfig   string    `json:"parsed_config"`
-	ClashConfig    string    `json:"clash_config"`
-	Enabled        bool      `json:"enabled"`
-	Tag            string    `json:"tag"`
-	Tags           []string  `json:"tags"`
-	OriginalServer string    `json:"original_server"`
-	ProbeServer    string    `json:"probe_server"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID               int64     `json:"id"`
+	RawURL           string    `json:"raw_url"`
+	NodeName         string    `json:"node_name"`
+	Protocol         string    `json:"protocol"`
+	ParsedConfig     string    `json:"parsed_config"`
+	ClashConfig      string    `json:"clash_config"`
+	Enabled          bool      `json:"enabled"`
+	Tag              string    `json:"tag"`
+	Tags             []string  `json:"tags"`
+	OriginalServer   string    `json:"original_server"`
+	ProbeServer      string    `json:"probe_server"`
+	ChainProxyNodeID *int64    `json:"chain_proxy_node_id"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 func convertNode(node storage.Node) nodeDTO {
@@ -1010,19 +1014,20 @@ func convertNode(node storage.Node) nodeDTO {
 		tags = []string{}
 	}
 	return nodeDTO{
-		ID:             node.ID,
-		RawURL:         node.RawURL,
-		NodeName:       node.NodeName,
-		Protocol:       node.Protocol,
-		ParsedConfig:   node.ParsedConfig,
-		ClashConfig:    node.ClashConfig,
-		Enabled:        node.Enabled,
-		Tag:            node.Tag,
-		Tags:           tags,
-		OriginalServer: node.OriginalServer,
-		ProbeServer:    node.ProbeServer,
-		CreatedAt:      node.CreatedAt,
-		UpdatedAt:      node.UpdatedAt,
+		ID:               node.ID,
+		RawURL:           node.RawURL,
+		NodeName:         node.NodeName,
+		Protocol:         node.Protocol,
+		ParsedConfig:     node.ParsedConfig,
+		ClashConfig:      node.ClashConfig,
+		Enabled:          node.Enabled,
+		Tag:              node.Tag,
+		Tags:             tags,
+		OriginalServer:   node.OriginalServer,
+		ProbeServer:      node.ProbeServer,
+		ChainProxyNodeID: node.ChainProxyNodeID,
+		CreatedAt:        node.CreatedAt,
+		UpdatedAt:        node.UpdatedAt,
 	}
 }
 

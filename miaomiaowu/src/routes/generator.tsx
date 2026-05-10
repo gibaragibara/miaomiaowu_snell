@@ -202,6 +202,7 @@ type SavedNode = {
   tag: string
   tags: string[]
   probe_server: string
+  chain_proxy_node_id?: number | null
   created_at: string
   updated_at: string
 }
@@ -1510,8 +1511,12 @@ function SubscriptionGeneratorPage() {
       // 处理链式代理：根据代理组的 dialerProxyGroup 配置添加 dialer-proxy
       if (parsedConfig.proxies && Array.isArray(parsedConfig.proxies)) {
         const nodeProtocolMap = new Map<string, string>()
+        const nodeIDToName = new Map<number, string>()
+        const nodeNameToChainID = new Map<string, number | null | undefined>()
         savedNodes.forEach(node => {
           nodeProtocolMap.set(node.node_name, node.protocol)
+          nodeIDToName.set(node.id, node.node_name)
+          nodeNameToChainID.set(node.node_name, node.chain_proxy_node_id)
         })
 
         // 先清除所有非链式节点的旧 dialer-proxy，防止残留
@@ -1519,6 +1524,17 @@ function SubscriptionGeneratorPage() {
           const protocol = nodeProtocolMap.get(proxy.name)
           if (!protocol || !protocol.includes('⇋')) {
             delete proxy['dialer-proxy']
+          }
+        })
+
+        // 为有 chain_proxy_node_id 的链式代理节点注入 dialer-proxy
+        parsedConfig.proxies.forEach((proxy: any) => {
+          const chainID = nodeNameToChainID.get(proxy.name)
+          if (chainID) {
+            const targetName = nodeIDToName.get(chainID)
+            if (targetName) {
+              proxy['dialer-proxy'] = targetName
+            }
           }
         })
 
@@ -1692,14 +1708,17 @@ function SubscriptionGeneratorPage() {
     const hasLandingNode = proxyGroups.some(g => g.name === '🌄 落地节点')
     const hasRelayNode = proxyGroups.some(g => g.name === '🌠 中转节点')
 
-    // 从链式代理节点中提取落地节点和中转节点
-    const chainProxyNodes = sortedEnabledNodes.filter(node => node.node_name.includes('⇋'))
+    // 从链式代理节点中提取落地节点和中转节点（支持旧格式 ⇋ 和新格式 |）
+    const chainProxyNodes = sortedEnabledNodes.filter(node =>
+      node.node_name.includes('⇋') || (node.dbNode?.protocol?.includes('⇋') && node.node_name.includes(' | '))
+    )
 
     const landingNodeNames = new Set<string>()
     const relayNodeNames = new Set<string>()
 
     chainProxyNodes.forEach(node => {
-      const parts = node.node_name.split('⇋')
+      const separator = node.node_name.includes('⇋') ? '⇋' : ' | '
+      const parts = node.node_name.split(separator)
       if (parts.length === 2) {
         landingNodeNames.add(parts[0].trim())
         relayNodeNames.add(parts[1].trim())
