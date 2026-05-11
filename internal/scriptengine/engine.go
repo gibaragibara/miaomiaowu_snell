@@ -2,6 +2,7 @@ package scriptengine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -74,11 +75,18 @@ func RunPostFetch(ctx context.Context, script string, config map[string]interfac
 	vm := goja.New()
 	setupVM(vm)
 
-	if err := vm.Set("__input__", config); err != nil {
-		return nil, fmt.Errorf("set input: %w", err)
+	// Serialize config to JSON then parse via JS JSON.parse to create native JS objects.
+	// This ensures Array methods like push/splice work correctly on nested arrays.
+	jsonBytes, err := json.Marshal(config)
+	if err != nil {
+		return nil, fmt.Errorf("marshal config to JSON: %w", err)
 	}
 
-	result, err := runWithTimeout(ctx, vm, script+";\nmain(__input__);")
+	if err := vm.Set("__raw_json__", string(jsonBytes)); err != nil {
+		return nil, fmt.Errorf("set raw json: %w", err)
+	}
+
+	result, err := runWithTimeout(ctx, vm, "var __input__ = JSON.parse(__raw_json__);\n"+script+";\nmain(__input__);")
 	if err != nil {
 		return nil, err
 	}
@@ -102,16 +110,16 @@ func RunPreSaveNodes(ctx context.Context, script string, proxies []map[string]in
 	vm := goja.New()
 	setupVM(vm)
 
-	input := make([]interface{}, len(proxies))
-	for i, p := range proxies {
-		input[i] = p
+	jsonBytes, err := json.Marshal(proxies)
+	if err != nil {
+		return nil, fmt.Errorf("marshal proxies to JSON: %w", err)
 	}
 
-	if err := vm.Set("__input__", input); err != nil {
-		return nil, fmt.Errorf("set input: %w", err)
+	if err := vm.Set("__raw_json__", string(jsonBytes)); err != nil {
+		return nil, fmt.Errorf("set raw json: %w", err)
 	}
 
-	result, err := runWithTimeout(ctx, vm, script+";\nmain(__input__);")
+	result, err := runWithTimeout(ctx, vm, "var __input__ = JSON.parse(__raw_json__);\n"+script+";\nmain(__input__);")
 	if err != nil {
 		return nil, err
 	}
