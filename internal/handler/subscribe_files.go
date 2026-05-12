@@ -3,8 +3,6 @@ package handler
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -453,8 +451,6 @@ func (h *subscribeFilesHandler) handleUpdate(w http.ResponseWriter, r *http.Requ
 	if req.Type != "" {
 		existing.Type = req.Type
 	}
-	// Update auto_sync_custom_rules if provided
-	wasAutoSyncEnabled := existing.AutoSyncCustomRules
 	if req.AutoSyncCustomRules != nil {
 		existing.AutoSyncCustomRules = *req.AutoSyncCustomRules
 	}
@@ -467,16 +463,12 @@ func (h *subscribeFilesHandler) handleUpdate(w http.ResponseWriter, r *http.Requ
 	if req.StatsServerIDs != nil {
 		existing.StatsServerIDs = *req.StatsServerIDs
 	}
-	// 更新模板绑定（绑定模板后禁用覆写开关）
 	templateJustBound := false
 	tagsChanged := false
 	if req.TemplateFilename != nil {
 		existing.TemplateFilename = *req.TemplateFilename
-		// 绑定模板后自动禁用覆写开关，因为配置将由模板生成
 		if *req.TemplateFilename != "" {
-			existing.AutoSyncCustomRules = false
 			templateJustBound = true
-			logger.Info("[订阅更新] 绑定模板，已禁用覆写开关", "subscribe_id", existing.ID, "template", *req.TemplateFilename)
 		}
 	}
 	// 更新选中的节点标签
@@ -573,21 +565,6 @@ func (h *subscribeFilesHandler) handleUpdate(w http.ResponseWriter, r *http.Requ
 			}
 		}
 		// 如果旧文件不存在，只更新数据库记录，不报错
-	}
-
-	// If auto_sync was just enabled (changed from false to true), trigger immediate sync
-	if !wasAutoSyncEnabled && updated.AutoSyncCustomRules {
-		go func() {
-			addedGroups, err := syncCustomRulesToFile(context.Background(), h.repo, updated)
-			if err != nil {
-				logger.Info("[AutoSync] 同步自定义规则失败", "filename", updated.Filename, "id", updated.ID, "error", err)
-			} else {
-				logger.Info("[AutoSync] 同步自定义规则成功", "filename", updated.Filename, "id", updated.ID)
-				if len(addedGroups) > 0 {
-					logger.Info("[AutoSync] 添加的代理组", "groups", addedGroups)
-				}
-			}
-		}()
 	}
 
 	// 如果绑定了V3模板或标签变化，从模板重新生成订阅文件
@@ -948,9 +925,6 @@ func (h *subscribeFilesHandler) handleCreateFromConfig(w http.ResponseWriter, r 
 		return
 	}
 
-	// Initialize custom rule application records to prevent duplicates on first modification
-	h.initializeCustomRuleApplications(r.Context(), created.ID)
-
 	// 同步 MMW 模式代理集合的节点到配置文件
 	// 使用 goroutine 异步执行，不阻塞响应
 	go h.syncMMWProxyProvidersToFile(subscribesDir, filename)
@@ -1112,104 +1086,6 @@ func (h *subscribeFilesHandler) handleUpdateContent(w http.ResponseWriter, r *ht
 		"status":  "updated",
 		"version": version,
 	})
-}
-
-// initializeCustomRuleApplications records the initial custom rule application state for a newly created subscribe file.
-// This is called when a file is created from the generator page where custom rules are already included in the content.
-// We only record the application state, not re-apply the rules (which would duplicate them).
-func (h *subscribeFilesHandler) initializeCustomRuleApplications(ctx context.Context, fileID int64) {
-	// Get all enabled custom rules to record their current state
-	rules, err := h.repo.ListEnabledCustomRules(ctx, "")
-	if err != nil {
-		logger.Info("[Subscribe] 获取自定义规则失败", "error", err)
-		return
-	}
-
-	if len(rules) == 0 {
-		return
-	}
-
-	// Record each rule's current state without modifying the file
-	for _, rule := range rules {
-		// Calculate content hash for tracking future changes
-		hash := sha256.Sum256([]byte(rule.Content))
-		contentHash := hex.EncodeToString(hash[:])
-
-		// Parse the rule content to extract the actual rules/providers that were applied
-		// This must match the format used in applyRulesRule and applyRuleProvidersRule
-		var appliedContent string
-		if rule.Type == "rules" {
-			// Parse rule content to get the array of rules
-			var newRules []interface{}
-
-			// Try to parse as map first (with "rules:" key)
-			var parsedAsMap map[string]interface{}
-			if err := yaml.Unmarshal([]byte(rule.Content), &parsedAsMap); err == nil {
-				if rulesValue, hasRulesKey := parsedAsMap["rules"]; hasRulesKey {
-					if rulesArray, ok := rulesValue.([]interface{}); ok {
-						newRules = rulesArray
-					}
-				}
-			}
-
-			// Try to parse as YAML array
-			if len(newRules) == 0 {
-				if err := yaml.Unmarshal([]byte(rule.Content), &newRules); err != nil {
-					// Parse as plain text
-					lines := strings.Split(rule.Content, "\n")
-					for _, line := range lines {
-						line = strings.TrimSpace(line)
-						if line != "" && !strings.HasPrefix(line, "#") {
-							newRules = append(newRules, line)
-						}
-					}
-				}
-			}
-
-			// Serialize to JSON format (same as applyRulesRule does)
-			if len(newRules) > 0 {
-				appliedJSON, _ := json.Marshal(newRules)
-				appliedContent = string(appliedJSON)
-			}
-		} else if rule.Type == "rule-providers" {
-			// Parse rule-providers content
-			var parsedContent map[string]interface{}
-			if err := yaml.Unmarshal([]byte(rule.Content), &parsedContent); err == nil {
-				var providersMap map[string]interface{}
-				if providersValue, hasProvidersKey := parsedContent["rule-providers"]; hasProvidersKey {
-					if pm, ok := providersValue.(map[string]interface{}); ok {
-						providersMap = pm
-					}
-				} else {
-					providersMap = parsedContent
-				}
-
-				// Serialize to JSON format
-				if len(providersMap) > 0 {
-					appliedJSON, _ := json.Marshal(providersMap)
-					appliedContent = string(appliedJSON)
-				}
-			}
-		} else if rule.Type == "dns" {
-			// For DNS rules, we don't track applied content
-			appliedContent = ""
-		}
-
-		app := &storage.CustomRuleApplication{
-			SubscribeFileID: fileID,
-			CustomRuleID:    rule.ID,
-			RuleType:        rule.Type,
-			RuleMode:        rule.Mode,
-			AppliedContent:  appliedContent,
-			ContentHash:     contentHash,
-		}
-
-		if err := h.repo.UpsertCustomRuleApplication(ctx, app); err != nil {
-			logger.Info("[Subscribe] 记录自定义规则应用失败", "rule_id", rule.ID, "error", err)
-		}
-	}
-
-	logger.Info("[Subscribe] 记录自定义规则应用状态完成", "rule_count", len(rules), "file_id", fileID)
 }
 
 // syncMMWProxyProvidersToFile 同步 MMW 模式代理集合的节点到指定文件

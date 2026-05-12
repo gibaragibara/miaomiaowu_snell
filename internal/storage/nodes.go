@@ -299,6 +299,9 @@ func (r *TrafficRepository) DeleteNode(ctx context.Context, id int64, username s
 		return ErrNodeNotFound
 	}
 
+	// 清除引用了该节点作为中转节点的 chain_proxy_node_id
+	_, _ = r.db.ExecContext(ctx, `UPDATE nodes SET chain_proxy_node_id = NULL WHERE chain_proxy_node_id = ? AND username = ?`, id, username)
+
 	// 检查该 raw_url 是否还有其他节点使用
 	// 如果没有，则删除对应的外部订阅及其关联的代理集合配置
 	if rawURL != "" {
@@ -358,6 +361,8 @@ func (r *TrafficRepository) DeleteNodeForSync(ctx context.Context, id int64, use
 	if affected == 0 {
 		return ErrNodeNotFound
 	}
+
+	_, _ = r.db.ExecContext(ctx, `UPDATE nodes SET chain_proxy_node_id = NULL WHERE chain_proxy_node_id = ? AND username = ?`, id, username)
 
 	return nil
 }

@@ -1,7 +1,7 @@
 # Build stage for frontend
 FROM node:20-slim AS frontend-builder
 
-ARG VERSION=0.6.7
+ARG VERSION=dev
 
 WORKDIR /app
 
@@ -25,7 +25,7 @@ FROM golang:1.24-bookworm AS backend-builder
 # Declare build arguments for multi-platform support
 ARG TARGETOS
 ARG TARGETARCH
-ARG VERSION=0.6.7
+ARG VERSION=dev
 
 WORKDIR /app
 

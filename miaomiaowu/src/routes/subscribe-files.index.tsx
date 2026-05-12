@@ -2824,17 +2824,10 @@ function SubscribeFilesPage() {
                   {
                     header: '覆写开关',
                     cell: (file) => (
-                      <div className='flex items-center gap-2'>
-                        {/* 有点绕, 如果绑定了模板, 则选中状态为false, 未绑定模板v3则选中状态以auto_sync_custom_rules为准 */}
-                        <Switch
-                          checked={!!file.template_filename ? false : (file.auto_sync_custom_rules || false)}
-                          onCheckedChange={(checked) => handleToggleAutoSync(file.id, checked)}
-                          disabled={!!file.template_filename}
-                        />
-                        {file.template_filename && (
-                          <span className='text-xs text-muted-foreground'>模板接管</span>
-                        )}
-                      </div>
+                      <Switch
+                        checked={file.auto_sync_custom_rules || false}
+                        onCheckedChange={(checked) => handleToggleAutoSync(file.id, checked)}
+                      />
                     ),
                     headerClassName: 'text-center',
                     cellClassName: 'text-center',

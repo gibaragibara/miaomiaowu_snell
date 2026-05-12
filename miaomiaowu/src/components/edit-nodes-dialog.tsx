@@ -53,7 +53,7 @@ interface Node {
   node_name: string
   tag?: string
   tags?: string[]
-  [key: string]: string | string[] | number | boolean | undefined
+  [key: string]: string | string[] | number | boolean | null | undefined
 }
 
 // 拖拽类型定义

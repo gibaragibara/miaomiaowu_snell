@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Upload, FileText, Plus, RefreshCw, Wand2 } from 'lucide-react'
+import { Upload, FileText, Plus, RefreshCw, Wand2, Link } from 'lucide-react'
 import { toast } from 'sonner'
 import { createBlankTemplate } from '@/lib/template-v3-utils'
 import { api } from '@/lib/api'
@@ -41,7 +41,7 @@ export function TemplateUploadDialog({
   onCreate,
   isLoading = false,
 }: TemplateUploadDialogProps) {
-  const [tab, setTab] = useState<'upload' | 'paste' | 'blank' | 'v2import' | 'fromSub'>('upload')
+  const [tab, setTab] = useState<'upload' | 'paste' | 'blank' | 'v2import' | 'fromSub' | 'fromUrl'>('upload')
   const [pasteContent, setPasteContent] = useState('')
   const [newTemplateName, setNewTemplateName] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -59,6 +59,11 @@ export function TemplateUploadDialog({
   const [isFetchingSubscriptions, setIsFetchingSubscriptions] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisPreview, setAnalysisPreview] = useState<string>('')
+
+  // From URL states
+  const [importUrl, setImportUrl] = useState('')
+  const [isFetchingUrl, setIsFetchingUrl] = useState(false)
+  const [urlPreview, setUrlPreview] = useState('')
 
   // Fetch user templates when dialog opens and v2import tab is selected
   useEffect(() => {
@@ -106,6 +111,8 @@ export function TemplateUploadDialog({
     setSelectedV2Template('')
     setSelectedSubscription('')
     setAnalysisPreview('')
+    setImportUrl('')
+    setUrlPreview('')
     setTab('upload')
   }
 
@@ -162,6 +169,9 @@ export function TemplateUploadDialog({
     } else if (tab === 'fromSub') {
       handleFromSubscription()
       return // Don't reset form yet, wait for analysis
+    } else if (tab === 'fromUrl') {
+      handleFromUrl()
+      return
     }
     resetForm()
   }
@@ -223,6 +233,59 @@ export function TemplateUploadDialog({
     } finally {
       setIsAnalyzing(false)
     }
+  }
+
+  const handleFromUrl = async () => {
+    if (!importUrl.trim()) {
+      toast.error('请输入模板链接')
+      return
+    }
+    if (!newTemplateName.trim()) {
+      toast.error('请输入模板名称')
+      return
+    }
+
+    setIsFetchingUrl(true)
+    try {
+      const content = urlPreview || await fetchUrlContent(importUrl.trim())
+
+      let name = newTemplateName.trim()
+      if (!name.endsWith('.yaml') && !name.endsWith('.yml')) {
+        name += '.yaml'
+      }
+
+      onCreate(name, content)
+      resetForm()
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || '获取模板内容失败')
+    } finally {
+      setIsFetchingUrl(false)
+    }
+  }
+
+  const handleUrlPreview = async () => {
+    if (!importUrl.trim()) {
+      toast.error('请输入模板链接')
+      return
+    }
+
+    setIsFetchingUrl(true)
+    try {
+      const content = await fetchUrlContent(importUrl.trim())
+      setUrlPreview(content)
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || '获取模板内容失败')
+    } finally {
+      setIsFetchingUrl(false)
+    }
+  }
+
+  const fetchUrlContent = async (url: string): Promise<string> => {
+    const response = await api.post('/api/admin/templates/fetch-source', {
+      url,
+      use_proxy: false,
+    })
+    return response.data.content
   }
 
   const handleV2Import = async () => {
@@ -409,12 +472,12 @@ export function TemplateUploadDialog({
         <DialogHeader>
           <DialogTitle>创建模板</DialogTitle>
           <DialogDescription>
-            上传 YAML 文件、粘贴内容、创建空白模板、从 V2 模板导入或从订阅生成
+            上传 YAML 文件、粘贴内容、创建空白模板、从链接导入、从 V2 模板导入或从订阅生成
           </DialogDescription>
         </DialogHeader>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-          <TabsList className="w-full grid grid-cols-5">
+          <TabsList className="w-full grid grid-cols-6">
             <TabsTrigger value="upload">
               <Upload className="h-4 w-4 mr-1" />
               上传
@@ -426,6 +489,10 @@ export function TemplateUploadDialog({
             <TabsTrigger value="blank">
               <Plus className="h-4 w-4 mr-1" />
               空白
+            </TabsTrigger>
+            <TabsTrigger value="fromUrl">
+              <Link className="h-4 w-4 mr-1" />
+              链接
             </TabsTrigger>
             <TabsTrigger value="v2import">
               <RefreshCw className="h-4 w-4 mr-1" />
@@ -484,6 +551,54 @@ export function TemplateUploadDialog({
             </div>
             <p className="text-sm text-muted-foreground">
               将创建包含基础结构的空白 v3 模板，包含节点选择、自动选择和全球直连三个代理组。
+            </p>
+          </TabsContent>
+
+          <TabsContent value="fromUrl" className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label>模板链接</Label>
+              <Input
+                value={importUrl}
+                onChange={(e) => {
+                  setImportUrl(e.target.value)
+                  setUrlPreview('')
+                }}
+                placeholder="https://example.com/template.yaml"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>模板名称</Label>
+              <Input
+                value={newTemplateName}
+                onChange={(e) => setNewTemplateName(e.target.value)}
+                placeholder="my_template.yaml"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={handleUrlPreview}
+                disabled={isFetchingUrl || !importUrl.trim()}
+              >
+                {isFetchingUrl ? '获取中...' : '预览内容'}
+              </Button>
+            </div>
+
+            {urlPreview && (
+              <div className="space-y-2">
+                <Label>模板内容预览</Label>
+                <Textarea
+                  value={urlPreview}
+                  readOnly
+                  className="min-h-[200px] font-mono text-xs"
+                />
+              </div>
+            )}
+
+            <p className="text-sm text-muted-foreground">
+              从外部链接导入 V3 模板 YAML 文件，支持 http/https 协议。
             </p>
           </TabsContent>
 
@@ -620,14 +735,16 @@ export function TemplateUploadDialog({
           <Button variant="outline" onClick={handleClose}>
             取消
           </Button>
-          <Button onClick={handleSubmit} disabled={isLoading || isConverting || isAnalyzing}>
-            {isLoading || isConverting || isAnalyzing
+          <Button onClick={handleSubmit} disabled={isLoading || isConverting || isAnalyzing || isFetchingUrl}>
+            {isLoading || isConverting || isAnalyzing || isFetchingUrl
               ? '处理中...'
               : tab === 'v2import'
                 ? '转换并创建'
                 : tab === 'fromSub'
                   ? '生成并创建'
-                  : '创建'}
+                  : tab === 'fromUrl'
+                    ? '导入并创建'
+                    : '创建'}
           </Button>
         </DialogFooter>
       </DialogContent>

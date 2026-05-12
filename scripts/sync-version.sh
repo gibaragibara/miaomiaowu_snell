@@ -17,9 +17,8 @@ fi
 
 echo "更新版本号: $VERSION"
 
-# 更新 internal/version/version.go
-sed -i "s/var Version = \".*\"/var Version = \"$VERSION\"/" "${PROJECT_ROOT}/internal/version/version.go"
-echo "✓ 更新成功 internal/version/version.go"
+# internal/version/version.go 由 release 构建通过 -ldflags 注入版本号
+echo "✓ 跳过 internal/version/version.go（构建时注入）"
 
 # 更新 install.sh
 sed -i "s/VERSION=\"v.*\"/VERSION=\"v$VERSION\"/" "${PROJECT_ROOT}/install.sh"
@@ -29,9 +28,8 @@ echo "✓ 更新成功 install.sh"
 sed -i "s/VERSION=\"v.*\"/VERSION=\"v$VERSION\"/" "${PROJECT_ROOT}/quick-install.sh"
 echo "✓ 更新成功 quick-install.sh"
 
-# 更新 use-version-check.ts
-sed -i "s/const CURRENT_VERSION = '.*'/const CURRENT_VERSION = '$VERSION'/" "${PROJECT_ROOT}/miaomiaowu/src/hooks/use-version-check.ts"
-echo "✓ 更新成功 miaomiaowu/src/hooks/use-version-check.ts"
+# use-version-check.ts 由 release 构建注入版本号
+echo "✓ 跳过 miaomiaowu/src/hooks/use-version-check.ts（构建时注入）"
 
 echo ""
 echo "版本号同步完成: $VERSION"

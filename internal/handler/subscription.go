@@ -678,6 +678,17 @@ func (h *SubscriptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	}
 	logger.Info("[⏱️ 耗时监测] 覆写脚本执行完成", "step", "override_script", "duration_ms", time.Since(stepStart).Milliseconds())
 
+	// 动态应用自定义规则
+	stepStart = time.Now()
+	if hasSubscribeFile && subscribeFile.AutoSyncCustomRules {
+		if modified, _, applyErr := applyCustomRulesToYaml(r.Context(), h.repo, data); applyErr != nil {
+			logger.Info("[Subscription] 应用自定义规则失败", "error", applyErr)
+		} else {
+			data = modified
+		}
+	}
+	logger.Info("[⏱️ 耗时监测] 自定义规则应用完成", "step", "apply_custom_rules", "duration_ms", time.Since(stepStart).Milliseconds())
+
 	// 格式转换
 	stepStart = time.Now()
 	// 根��参数t的类型调用substore的转换代码

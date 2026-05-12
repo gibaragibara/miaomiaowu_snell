@@ -1708,20 +1708,17 @@ function SubscriptionGeneratorPage() {
     const hasLandingNode = proxyGroups.some(g => g.name === '🌄 落地节点')
     const hasRelayNode = proxyGroups.some(g => g.name === '🌠 中转节点')
 
-    // 从链式代理节点中提取落地节点和中转节点（支持旧格式 ⇋ 和新格式 |）
-    const chainProxyNodes = sortedEnabledNodes.filter(node =>
-      node.node_name.includes('⇋') || (node.dbNode?.protocol?.includes('⇋') && node.node_name.includes(' | '))
-    )
+    const nodeIDToName = new Map<number, string>()
+    sortedEnabledNodes.forEach(node => nodeIDToName.set(node.id, node.node_name))
 
     const landingNodeNames = new Set<string>()
     const relayNodeNames = new Set<string>()
 
-    chainProxyNodes.forEach(node => {
-      const separator = node.node_name.includes('⇋') ? '⇋' : ' | '
-      const parts = node.node_name.split(separator)
-      if (parts.length === 2) {
-        landingNodeNames.add(parts[0].trim())
-        relayNodeNames.add(parts[1].trim())
+    sortedEnabledNodes.forEach(node => {
+      if (node.chain_proxy_node_id) {
+        landingNodeNames.add(node.node_name)
+        const relayName = nodeIDToName.get(node.chain_proxy_node_id)
+        if (relayName) relayNodeNames.add(relayName)
       }
     })
 
