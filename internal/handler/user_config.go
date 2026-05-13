@@ -35,8 +35,9 @@ type userConfigRequest struct {
 	EnableSubInfoNodes      bool    `json:"enable_sub_info_nodes"`
 	SubInfoExpirePrefix     string  `json:"sub_info_expire_prefix"`
 	SubInfoTrafficPrefix    string  `json:"sub_info_traffic_prefix"`
-	EnableSubTrafficHeader  bool    `json:"enable_sub_traffic_header"`
-	EnableOverrideScripts   bool    `json:"enable_override_scripts"`
+	EnableSubTrafficHeader    bool   `json:"enable_sub_traffic_header"`
+	EnableOverrideScripts     bool   `json:"enable_override_scripts"`
+	SubscriptionOutputFormat  string `json:"subscription_output_format"`
 }
 
 type userConfigResponse struct {
@@ -60,8 +61,9 @@ type userConfigResponse struct {
 	EnableSubInfoNodes      bool    `json:"enable_sub_info_nodes"`
 	SubInfoExpirePrefix     string  `json:"sub_info_expire_prefix"`
 	SubInfoTrafficPrefix    string  `json:"sub_info_traffic_prefix"`
-	EnableSubTrafficHeader  bool    `json:"enable_sub_traffic_header"`
-	EnableOverrideScripts   bool    `json:"enable_override_scripts"`
+	EnableSubTrafficHeader    bool   `json:"enable_sub_traffic_header"`
+	EnableOverrideScripts     bool   `json:"enable_override_scripts"`
+	SubscriptionOutputFormat  string `json:"subscription_output_format"`
 }
 
 func NewUserConfigHandler(repo *storage.TrafficRepository) http.Handler {
@@ -100,28 +102,29 @@ func handleGetUserConfig(w http.ResponseWriter, r *http.Request, repo *storage.T
 		if errors.Is(err, storage.ErrUserSettingsNotFound) {
 			// Return default settings if not found
 			resp := userConfigResponse{
-				ForceSyncExternal:       false,
-				MatchRule:               "node_name",
-				SyncScope:               "saved_only",
-				KeepNodeName:            true,
-				CacheExpireMinutes:      0,
-				SyncTraffic:             false,
-				EnableProbeBinding:      false,
-				CustomRulesEnabled:      true, // 自定义规则始终启用
-				EnableShortLink:         systemConfig.EnableShortLink,
-				TemplateVersion:         "v2", // 默认使用v2模板系统
-				EnableProxyProvider:     false,
-				NodeOrder:               []int64{},
-				NodeNameFilter:          "剩余|流量|到期|订阅|时间|重置",
-				ProxyGroupsSourceURL:    systemConfig.ProxyGroupsSourceURL,
-				ClientCompatibilityMode: systemConfig.ClientCompatibilityMode,
-				SilentMode:              systemConfig.SilentMode,
-				SilentModeTimeout:       systemConfig.SilentModeTimeout,
-				EnableSubInfoNodes:      systemConfig.EnableSubInfoNodes,
-				SubInfoExpirePrefix:     systemConfig.SubInfoExpirePrefix,
-				SubInfoTrafficPrefix:    systemConfig.SubInfoTrafficPrefix,
-				EnableSubTrafficHeader:  systemConfig.EnableSubTrafficHeader,
-				EnableOverrideScripts:  systemConfig.EnableOverrideScripts,
+				ForceSyncExternal:        false,
+				MatchRule:                "node_name",
+				SyncScope:                "saved_only",
+				KeepNodeName:             true,
+				CacheExpireMinutes:       0,
+				SyncTraffic:              false,
+				EnableProbeBinding:       false,
+				CustomRulesEnabled:       true, // 自定义规则始终启用
+				EnableShortLink:          systemConfig.EnableShortLink,
+				TemplateVersion:          "v2", // 默认使用v2模板系统
+				EnableProxyProvider:      false,
+				NodeOrder:                []int64{},
+				NodeNameFilter:           "剩余|流量|到期|订阅|时间|重置",
+				ProxyGroupsSourceURL:     systemConfig.ProxyGroupsSourceURL,
+				ClientCompatibilityMode:  systemConfig.ClientCompatibilityMode,
+				SilentMode:               systemConfig.SilentMode,
+				SilentModeTimeout:        systemConfig.SilentModeTimeout,
+				EnableSubInfoNodes:       systemConfig.EnableSubInfoNodes,
+				SubInfoExpirePrefix:      systemConfig.SubInfoExpirePrefix,
+				SubInfoTrafficPrefix:     systemConfig.SubInfoTrafficPrefix,
+				EnableSubTrafficHeader:   systemConfig.EnableSubTrafficHeader,
+				EnableOverrideScripts:    systemConfig.EnableOverrideScripts,
+				SubscriptionOutputFormat: systemConfig.SubscriptionOutputFormat,
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
@@ -133,28 +136,29 @@ func handleGetUserConfig(w http.ResponseWriter, r *http.Request, repo *storage.T
 	}
 
 	resp := userConfigResponse{
-		ForceSyncExternal:       settings.ForceSyncExternal,
-		MatchRule:               settings.MatchRule,
-		SyncScope:               settings.SyncScope,
-		KeepNodeName:            settings.KeepNodeName,
-		CacheExpireMinutes:      settings.CacheExpireMinutes,
-		SyncTraffic:             settings.SyncTraffic,
-		EnableProbeBinding:      settings.EnableProbeBinding,
-		CustomRulesEnabled:      true, // 自定义规则始终启用
-		EnableShortLink:         systemConfig.EnableShortLink,
-		TemplateVersion:         settings.TemplateVersion,
-		EnableProxyProvider:     settings.EnableProxyProvider,
-		NodeOrder:               settings.NodeOrder,
-		NodeNameFilter:          settings.NodeNameFilter,
-		ProxyGroupsSourceURL:    systemConfig.ProxyGroupsSourceURL,
-		ClientCompatibilityMode: systemConfig.ClientCompatibilityMode,
-		SilentMode:              systemConfig.SilentMode,
-		SilentModeTimeout:       systemConfig.SilentModeTimeout,
-		EnableSubInfoNodes:      systemConfig.EnableSubInfoNodes,
-		SubInfoExpirePrefix:     systemConfig.SubInfoExpirePrefix,
-		SubInfoTrafficPrefix:    systemConfig.SubInfoTrafficPrefix,
-		EnableSubTrafficHeader:  systemConfig.EnableSubTrafficHeader,
-		EnableOverrideScripts:  systemConfig.EnableOverrideScripts,
+		ForceSyncExternal:        settings.ForceSyncExternal,
+		MatchRule:                settings.MatchRule,
+		SyncScope:                settings.SyncScope,
+		KeepNodeName:             settings.KeepNodeName,
+		CacheExpireMinutes:       settings.CacheExpireMinutes,
+		SyncTraffic:              settings.SyncTraffic,
+		EnableProbeBinding:       settings.EnableProbeBinding,
+		CustomRulesEnabled:       true, // 自定义规则始终启用
+		EnableShortLink:          systemConfig.EnableShortLink,
+		TemplateVersion:          settings.TemplateVersion,
+		EnableProxyProvider:      settings.EnableProxyProvider,
+		NodeOrder:                settings.NodeOrder,
+		NodeNameFilter:           settings.NodeNameFilter,
+		ProxyGroupsSourceURL:     systemConfig.ProxyGroupsSourceURL,
+		ClientCompatibilityMode:  systemConfig.ClientCompatibilityMode,
+		SilentMode:               systemConfig.SilentMode,
+		SilentModeTimeout:        systemConfig.SilentModeTimeout,
+		EnableSubInfoNodes:       systemConfig.EnableSubInfoNodes,
+		SubInfoExpirePrefix:      systemConfig.SubInfoExpirePrefix,
+		SubInfoTrafficPrefix:     systemConfig.SubInfoTrafficPrefix,
+		EnableSubTrafficHeader:   systemConfig.EnableSubTrafficHeader,
+		EnableOverrideScripts:    systemConfig.EnableOverrideScripts,
+		SubscriptionOutputFormat: systemConfig.SubscriptionOutputFormat,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -248,6 +252,15 @@ func handleUpdateUserConfig(w http.ResponseWriter, r *http.Request, repo *storag
 	}
 	oldSysCfg, _ := repo.GetSystemConfig(r.Context())
 
+	subscriptionOutputFormat := strings.TrimSpace(payload.SubscriptionOutputFormat)
+	if subscriptionOutputFormat == "" {
+		subscriptionOutputFormat = "yaml"
+	}
+	if subscriptionOutputFormat != "yaml" && subscriptionOutputFormat != "json" {
+		writeError(w, http.StatusBadRequest, errors.New("subscription_output_format must be 'yaml' or 'json'"))
+		return
+	}
+
 	systemConfig := oldSysCfg
 	systemConfig.ProxyGroupsSourceURL = proxyGroupsSourceURL
 	systemConfig.ClientCompatibilityMode = payload.ClientCompatibilityMode
@@ -259,6 +272,7 @@ func handleUpdateUserConfig(w http.ResponseWriter, r *http.Request, repo *storag
 	systemConfig.EnableShortLink = payload.EnableShortLink
 	systemConfig.EnableSubTrafficHeader = payload.EnableSubTrafficHeader
 	systemConfig.EnableOverrideScripts = payload.EnableOverrideScripts
+	systemConfig.SubscriptionOutputFormat = subscriptionOutputFormat
 	if err := repo.UpdateSystemConfig(r.Context(), systemConfig); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Errorf("update system config: %w", err))
 		return
@@ -279,28 +293,29 @@ func handleUpdateUserConfig(w http.ResponseWriter, r *http.Request, repo *storag
 	}
 
 	resp := userConfigResponse{
-		ForceSyncExternal:       settings.ForceSyncExternal,
-		MatchRule:               settings.MatchRule,
-		SyncScope:               settings.SyncScope,
-		KeepNodeName:            settings.KeepNodeName,
-		CacheExpireMinutes:      settings.CacheExpireMinutes,
-		SyncTraffic:             settings.SyncTraffic,
-		EnableProbeBinding:      settings.EnableProbeBinding,
-		CustomRulesEnabled:      true, // 自定义规则始终启用
-		EnableShortLink:         payload.EnableShortLink,
-		TemplateVersion:         settings.TemplateVersion,
-		EnableProxyProvider:     settings.EnableProxyProvider,
-		NodeOrder:               settings.NodeOrder,
-		NodeNameFilter:          settings.NodeNameFilter,
-		ProxyGroupsSourceURL:    proxyGroupsSourceURL,
-		ClientCompatibilityMode: payload.ClientCompatibilityMode,
-		SilentMode:              payload.SilentMode,
-		SilentModeTimeout:       silentModeTimeout,
-		EnableSubInfoNodes:      payload.EnableSubInfoNodes,
-		SubInfoExpirePrefix:     subInfoExpirePrefix,
-		SubInfoTrafficPrefix:    subInfoTrafficPrefix,
-		EnableSubTrafficHeader:  payload.EnableSubTrafficHeader,
-		EnableOverrideScripts:  payload.EnableOverrideScripts,
+		ForceSyncExternal:        settings.ForceSyncExternal,
+		MatchRule:                settings.MatchRule,
+		SyncScope:                settings.SyncScope,
+		KeepNodeName:             settings.KeepNodeName,
+		CacheExpireMinutes:       settings.CacheExpireMinutes,
+		SyncTraffic:              settings.SyncTraffic,
+		EnableProbeBinding:       settings.EnableProbeBinding,
+		CustomRulesEnabled:       true, // 自定��规则始终启用
+		EnableShortLink:          payload.EnableShortLink,
+		TemplateVersion:          settings.TemplateVersion,
+		EnableProxyProvider:      settings.EnableProxyProvider,
+		NodeOrder:                settings.NodeOrder,
+		NodeNameFilter:           settings.NodeNameFilter,
+		ProxyGroupsSourceURL:     proxyGroupsSourceURL,
+		ClientCompatibilityMode:  payload.ClientCompatibilityMode,
+		SilentMode:               payload.SilentMode,
+		SilentModeTimeout:        silentModeTimeout,
+		EnableSubInfoNodes:       payload.EnableSubInfoNodes,
+		SubInfoExpirePrefix:      subInfoExpirePrefix,
+		SubInfoTrafficPrefix:     subInfoTrafficPrefix,
+		EnableSubTrafficHeader:   payload.EnableSubTrafficHeader,
+		EnableOverrideScripts:    payload.EnableOverrideScripts,
+		SubscriptionOutputFormat: subscriptionOutputFormat,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -232,9 +232,11 @@ type SubscribeFile struct {
 	Filename            string
 	FileShortCode       string     // 3-character code for file identification in composite short links
 	CustomShortCode     string     // User-defined short code (replaces FileShortCode when set)
-	AutoSyncCustomRules bool       // Whether to automatically sync custom rules to this file
-	TemplateFilename    string     // 绑定的 V3 模板文件名，为空表示未绑定模板
-	SelectedTags        []string   // 选中的节点标签，为空表示使用所有节点
+	AutoSyncCustomRules      bool    // Whether to automatically sync custom rules to this file
+	SelectedCustomRuleIDs    []int64 // 选中的自定义规则 ID，为空且开启覆写时表示应用全部已启用规则
+	SelectedOverrideScriptIDs []int64 // 选中的覆写脚本 ID，为空且开启覆写时表示应用全部已启用脚本
+	TemplateFilename         string  // 绑定的 V3 模板文件名，为空表示未绑定模板
+	SelectedTags             []string // 选中的节点标签，为空表示使用所有节点
 	RawOutput           bool       // 非Clash配置，直接输出原始内容
 	SortOrder           int        // 排序权重，值越小越靠前
 	TrafficLimit        *float64   // 手动设置的总流量上限(GB)，nil表示跟随探针
@@ -277,7 +279,8 @@ type SystemConfig struct {
 	SubInfoTrafficPrefix    string // Prefix for remaining traffic node, default "⌛剩余流量"
 	EnableShortLink         bool   // 启用短链接（全局设置）
 	EnableSubTrafficHeader  bool   // 启用订阅响应头流量信息
-	EnableOverrideScripts   bool   // 启用覆写脚本功能
+	EnableOverrideScripts      bool   // 启用覆写脚本功能
+	SubscriptionOutputFormat   string // 订阅输出格式: "yaml" (default) or "json"
 	// Telegram notification settings
 	NotifyEnabled          bool
 	TelegramBotToken       string
@@ -972,6 +975,11 @@ WHERE NOT EXISTS (SELECT 1 FROM system_config WHERE id = 1);
 		return err
 	}
 
+	// Add subscription_output_format column to system_config table (default "yaml")
+	if err := r.ensureSystemConfigColumn("subscription_output_format", "TEXT NOT NULL DEFAULT 'yaml'"); err != nil {
+		return err
+	}
+
 	// Telegram notification columns
 	if err := r.ensureSystemConfigColumn("notify_enabled", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
@@ -1044,6 +1052,13 @@ CREATE INDEX IF NOT EXISTS idx_custom_rules_enabled ON custom_rules(enabled);
 
 	// 添加 selected_tags 字段，用于存储选中的节点标签（JSON 数组）
 	if err := r.ensureSubscribeFileColumn("selected_tags", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
+		return err
+	}
+
+	if err := r.ensureSubscribeFileColumn("selected_custom_rule_ids", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
+		return err
+	}
+	if err := r.ensureSubscribeFileColumn("selected_override_script_ids", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
 		return err
 	}
 
@@ -4584,6 +4599,7 @@ func (r *TrafficRepository) GetSystemConfig(ctx context.Context) (SystemConfig, 
 SELECT proxy_groups_source_url, client_compatibility_mode, silent_mode, silent_mode_timeout,
        enable_sub_info_nodes, sub_info_expire_prefix, sub_info_traffic_prefix,
        COALESCE(enable_short_link, 1), COALESCE(enable_sub_traffic_header, 1), COALESCE(enable_override_scripts, 0),
+       COALESCE(subscription_output_format, 'yaml'),
        COALESCE(notify_enabled, 0), COALESCE(telegram_bot_token, ''), COALESCE(telegram_chat_id, ''),
        COALESCE(notify_subscribe_fetch, 1), COALESCE(notify_login, 1), COALESCE(notify_ip_ban, 1),
        COALESCE(notify_silent_mode, 1), COALESCE(notify_daily_traffic, 0), COALESCE(notify_expiry, 1),
@@ -4601,6 +4617,7 @@ WHERE id = 1
 		&cfg.ProxyGroupsSourceURL, &compatibilityMode, &silentMode, &silentModeTimeout,
 		&enableSubInfoNodes, &cfg.SubInfoExpirePrefix, &cfg.SubInfoTrafficPrefix,
 		&enableShortLinkInt, &enableSubTrafficHeaderInt, &enableOverrideScriptsInt,
+		&cfg.SubscriptionOutputFormat,
 		&notifyEnabledInt, &cfg.TelegramBotToken, &cfg.TelegramChatID,
 		&notifySubFetchInt, &notifyLoginInt, &notifyIPBanInt,
 		&notifySilentModeInt, &notifyDailyTrafficInt, &notifyExpiryInt,
@@ -4609,12 +4626,13 @@ WHERE id = 1
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return SystemConfig{
-				SilentModeTimeout:      15,
-				SubInfoExpirePrefix:    "📅过期时间",
-				SubInfoTrafficPrefix:   "⌛剩余流量",
-				EnableShortLink:        true,
-				EnableSubTrafficHeader: true,
-				NotifyDailyTrafficTime: "08:00",
+				SilentModeTimeout:        15,
+				SubInfoExpirePrefix:      "📅过期时间",
+				SubInfoTrafficPrefix:     "⌛剩余流量",
+				EnableShortLink:          true,
+				EnableSubTrafficHeader:   true,
+				SubscriptionOutputFormat: "yaml",
+				NotifyDailyTrafficTime:   "08:00",
 			}, nil
 		}
 		return SystemConfig{}, fmt.Errorf("query system config: %w", err)
@@ -4646,6 +4664,9 @@ WHERE id = 1
 	if cfg.NotifyDailyTrafficTime == "" {
 		cfg.NotifyDailyTrafficTime = "08:00"
 	}
+	if cfg.SubscriptionOutputFormat == "" {
+		cfg.SubscriptionOutputFormat = "yaml"
+	}
 	return cfg, nil
 }
 
@@ -4664,6 +4685,7 @@ SET proxy_groups_source_url = ?,
     enable_short_link = ?,
     enable_sub_traffic_header = ?,
     enable_override_scripts = ?,
+    subscription_output_format = ?,
     notify_enabled = ?,
     telegram_bot_token = ?,
     telegram_chat_id = ?,
@@ -4702,10 +4724,16 @@ WHERE id = 1
 		dailyTrafficTime = "08:00"
 	}
 
+	subscriptionOutputFormat := cfg.SubscriptionOutputFormat
+	if subscriptionOutputFormat == "" {
+		subscriptionOutputFormat = "yaml"
+	}
+
 	result, err := r.db.ExecContext(ctx, updateStmt,
 		cfg.ProxyGroupsSourceURL, boolToInt(cfg.ClientCompatibilityMode), boolToInt(cfg.SilentMode), silentModeTimeout,
 		boolToInt(cfg.EnableSubInfoNodes), subInfoExpirePrefix, subInfoTrafficPrefix,
 		boolToInt(cfg.EnableShortLink), boolToInt(cfg.EnableSubTrafficHeader), boolToInt(cfg.EnableOverrideScripts),
+		subscriptionOutputFormat,
 		boolToInt(cfg.NotifyEnabled), cfg.TelegramBotToken, cfg.TelegramChatID,
 		boolToInt(cfg.NotifySubscribeFetch), boolToInt(cfg.NotifyLogin), boolToInt(cfg.NotifyIPBan),
 		boolToInt(cfg.NotifySilentMode), boolToInt(cfg.NotifyDailyTraffic), boolToInt(cfg.NotifyExpiry),

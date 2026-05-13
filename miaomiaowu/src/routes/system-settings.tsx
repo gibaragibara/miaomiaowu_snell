@@ -58,6 +58,7 @@ interface UserConfig {
   sub_info_traffic_prefix: string
   enable_sub_traffic_header: boolean
   enable_override_scripts: boolean
+  subscription_output_format: string
 }
 
 export const Route = createFileRoute('/system-settings')({
@@ -93,6 +94,7 @@ function SystemSettingsPage() {
   const [subInfoTrafficPrefix, setSubInfoTrafficPrefix] = useState('⌛剩余流量')
   const [enableSubTrafficHeader, setEnableSubTrafficHeader] = useState(true)
   const [enableOverrideScripts, setEnableOverrideScripts] = useState(false)
+  const [subscriptionOutputFormat, setSubscriptionOutputFormat] = useState('yaml')
 
   // Notification config state
   const [notifyConfig, setNotifyConfig] = useState<NotifyConfig>({
@@ -194,6 +196,7 @@ function SystemSettingsPage() {
       setSubInfoTrafficPrefix(userConfig.sub_info_traffic_prefix || '⌛剩余流量')
       setEnableSubTrafficHeader(userConfig.enable_sub_traffic_header !== false)
       setEnableOverrideScripts(userConfig.enable_override_scripts || false)
+      setSubscriptionOutputFormat(userConfig.subscription_output_format || 'yaml')
     }
   }, [userConfig])
 
@@ -227,6 +230,7 @@ function SystemSettingsPage() {
       setSubInfoTrafficPrefix(variables.sub_info_traffic_prefix)
       setEnableSubTrafficHeader(variables.enable_sub_traffic_header)
       setEnableOverrideScripts(variables.enable_override_scripts)
+      setSubscriptionOutputFormat(variables.subscription_output_format || 'yaml')
       toast.success('设置已更新')
     },
     onError: (error) => {
@@ -258,6 +262,7 @@ function SystemSettingsPage() {
       sub_info_traffic_prefix: subInfoTrafficPrefix,
       enable_sub_traffic_header: enableSubTrafficHeader,
       enable_override_scripts: enableOverrideScripts,
+      subscription_output_format: subscriptionOutputFormat,
       ...updates,
     })
   }
@@ -797,6 +802,41 @@ function SystemSettingsPage() {
                     onCheckedChange={(checked) => updateConfig({ enable_sub_traffic_header: checked })}
                     disabled={loadingConfig || updateConfigMutation.isPending}
                   />
+                </div>
+
+                {/* 订阅序列化格式 */}
+                <div className='flex items-center justify-between rounded-lg border p-3'>
+                  <div className='flex items-center gap-2'>
+                    <Label className='cursor-default'>订阅序列化格式</Label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <CircleHelp className='h-4 w-4 text-muted-foreground cursor-help' />
+                      </TooltipTrigger>
+                      <TooltipContent side='top' className='max-w-xs'>
+                        <p>选择 Clash 订阅的输出格式。默认 YAML，选择 JSON 后订阅将以 JSON 格式输出。仅影响 Clash 格式订阅，不影响其他客户端格式（Surge、Sing-Box 等）。</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <div className='flex gap-1'>
+                    {[
+                      { value: 'yaml', label: 'YAML' },
+                      { value: 'json', label: 'JSON' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type='button'
+                        onClick={() => updateConfig({ subscription_output_format: opt.value })}
+                        disabled={loadingConfig || updateConfigMutation.isPending}
+                        className={`px-3 py-1 text-xs border rounded-md transition-colors ${
+                          subscriptionOutputFormat === opt.value
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background hover:bg-muted border-border'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
