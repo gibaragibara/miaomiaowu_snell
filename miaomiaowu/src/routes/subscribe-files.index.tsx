@@ -549,7 +549,7 @@ function SubscribeFilesPage() {
     const nodes = allNodesData?.nodes ?? []
     const grouped: Record<string, string[]> = {}
     for (const node of nodes) {
-      const nodeTags = node.tags?.length ? node.tags : (node.tag ? [node.tag] : [])
+      const nodeTags = node.tags?.length ? node.tags : (node.tag ? [node.tag] : ['手动输入'])
       for (const t of nodeTags) {
         if (!grouped[t]) grouped[t] = []
         grouped[t].push(node.node_name)
@@ -563,7 +563,7 @@ function SubscribeFilesPage() {
     const nodes = allNodesData?.nodes ?? []
     const tags = new Set<string>()
     for (const node of nodes) {
-      const nodeTags = node.tags?.length ? node.tags : (node.tag ? [node.tag] : [])
+      const nodeTags = node.tags?.length ? node.tags : (node.tag ? [node.tag] : ['手动输入'])
       for (const t of nodeTags) tags.add(t)
     }
     return Array.from(tags).sort()
