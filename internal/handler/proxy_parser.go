@@ -344,25 +344,7 @@ func parseShadowsocksURL(uri string) (map[string]any, error) {
 
 		if matchedCipher != "" {
 			method = matchedCipher
-			passwordPart := authPart[len(matchedCipher)+1:]
-			// Try base64 decode password
-			if decoded, err := base64DecodeURLSafe(passwordPart); err == nil {
-				// Check if decoded looks like valid password (printable ASCII)
-				valid := true
-				for _, c := range decoded {
-					if c < 0x20 || c > 0x7E {
-						valid = false
-						break
-					}
-				}
-				if valid && decoded != "" {
-					password = decoded
-				} else {
-					password = passwordPart
-				}
-			} else {
-				password = passwordPart
-			}
+			password = authPart[len(matchedCipher)+1:]
 		} else {
 			// base64 encoded format
 			decoded, err := base64DecodeURLSafe(authPart)
