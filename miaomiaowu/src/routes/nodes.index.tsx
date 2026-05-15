@@ -787,6 +787,7 @@ function NodesPage() {
         enabled: target.enabled,
         tag: target.tag,
         tags: target.tags || [target.tag],
+        chain_proxy_node_id: target.chain_proxy_node_id ?? null,
       })
       return response.data
     },
@@ -1421,6 +1422,7 @@ function NodesPage() {
         enabled: node.enabled,
         tag: tags[0] || '',
         tags,
+        chain_proxy_node_id: node.chain_proxy_node_id ?? null,
       })
     },
     onSuccess: () => {

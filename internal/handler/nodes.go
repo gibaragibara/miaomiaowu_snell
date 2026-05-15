@@ -244,6 +244,7 @@ func (h *nodesHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		writeBadRequest(w, "请求格式不正确")
 		return
 	}
+	req.parseChainProxyNodeID()
 
 	// 校验节点名称不为空
 	if strings.TrimSpace(req.NodeName) == "" {
@@ -401,6 +402,7 @@ func (h *nodesHandler) handleUpdate(w http.ResponseWriter, r *http.Request, idSe
 		writeBadRequest(w, "请求格式不正确")
 		return
 	}
+	req.parseChainProxyNodeID()
 
 	// 如果节点名称被修改，需要校验新名称
 	if req.NodeName != "" && req.NodeName != oldNodeName {
@@ -472,7 +474,9 @@ func (h *nodesHandler) handleUpdate(w http.ResponseWriter, r *http.Request, idSe
 		existing.Tag = req.Tags[0]
 	}
 	existing.Enabled = req.Enabled
-	existing.ChainProxyNodeID = req.ChainProxyNodeID
+	if req.hasChainProxyNodeID() {
+		existing.ChainProxyNodeID = req.ChainProxyNodeID
+	}
 
 	updated, err := h.repo.UpdateNode(r.Context(), existing)
 	if err != nil {
@@ -980,15 +984,31 @@ func (h *nodesHandler) handleBatchRename(w http.ResponseWriter, r *http.Request)
 }
 
 type nodeRequest struct {
-	RawURL           string   `json:"raw_url"`
-	NodeName         string   `json:"node_name"`
-	Protocol         string   `json:"protocol"`
-	ParsedConfig     string   `json:"parsed_config"`
-	ClashConfig      string   `json:"clash_config"`
-	Enabled          bool     `json:"enabled"`
-	Tag              string   `json:"tag"`
-	Tags             []string `json:"tags"`
-	ChainProxyNodeID *int64   `json:"chain_proxy_node_id"`
+	RawURL              string           `json:"raw_url"`
+	NodeName            string           `json:"node_name"`
+	Protocol            string           `json:"protocol"`
+	ParsedConfig        string           `json:"parsed_config"`
+	ClashConfig         string           `json:"clash_config"`
+	Enabled             bool             `json:"enabled"`
+	Tag                 string           `json:"tag"`
+	Tags                []string         `json:"tags"`
+	ChainProxyNodeID    *int64           `json:"-"`
+	RawChainProxyNodeID json.RawMessage  `json:"chain_proxy_node_id"`
+}
+
+func (r *nodeRequest) hasChainProxyNodeID() bool {
+	return r.RawChainProxyNodeID != nil
+}
+
+func (r *nodeRequest) parseChainProxyNodeID() {
+	if r.RawChainProxyNodeID == nil || string(r.RawChainProxyNodeID) == "null" {
+		r.ChainProxyNodeID = nil
+		return
+	}
+	var id int64
+	if json.Unmarshal(r.RawChainProxyNodeID, &id) == nil {
+		r.ChainProxyNodeID = &id
+	}
 }
 
 type nodeDTO struct {

@@ -187,6 +187,16 @@ func parseVmessURL(uri string) (map[string]any, error) {
 	network := getString(config, "net", "tcp")
 	tls := getString(config, "tls", "")
 
+	udp := true
+	if v, ok := config["udp"]; ok {
+		switch val := v.(type) {
+		case bool:
+			udp = val
+		case string:
+			udp = val != "false" && val != "0"
+		}
+	}
+
 	node := map[string]any{
 		"name":    name,
 		"type":    "vmess",
@@ -196,7 +206,7 @@ func parseVmessURL(uri string) (map[string]any, error) {
 		"alterId": alterId,
 		"cipher":  cipher,
 		"network": network,
-		"udp":     true,
+		"udp":     udp,
 		"tfo":     false,
 	}
 
@@ -297,6 +307,11 @@ func parseShadowsocksURL(uri string) (map[string]any, error) {
 	if strings.Contains(mainPart, "@") {
 		atIdx := strings.LastIndex(mainPart, "@")
 		authPart := mainPart[:atIdx]
+		if strings.Contains(authPart, "%") {
+			if decoded, err := url.QueryUnescape(authPart); err == nil {
+				authPart = decoded
+			}
+		}
 		serverPart := mainPart[atIdx+1:]
 
 		// Parse server:port
@@ -350,11 +365,7 @@ func parseShadowsocksURL(uri string) (map[string]any, error) {
 			}
 		} else {
 			// base64 encoded format
-			encodedPart := authPart
-			if strings.Contains(encodedPart, "%") {
-				encodedPart, _ = url.QueryUnescape(encodedPart)
-			}
-			decoded, err := base64DecodeURLSafe(encodedPart)
+			decoded, err := base64DecodeURLSafe(authPart)
 			if err != nil {
 				return nil, fmt.Errorf("decode ss auth: %w", err)
 			}
@@ -1124,7 +1135,7 @@ func parseTuicURL(uri string) (map[string]any, error) {
 	}
 
 	// Skip cert verify
-	node["skip-cert-verify"] = queryParams["allowInsecure"] == "1" || queryParams["allow_insecure"] == "1"
+	node["skip-cert-verify"] = queryParams["insecure"] == "1" || queryParams["allowInsecure"] == "1" || queryParams["allow_insecure"] == "1" || queryParams["skip-cert-verify"] == "1"
 
 	// Congestion controller
 	if cc := queryParams["congestion_control"]; cc != "" {
@@ -1350,7 +1361,7 @@ func parseWireGuardURL(uri string) (map[string]any, error) {
 		if len(kv) != 2 {
 			continue
 		}
-		key := strings.ReplaceAll(kv[0], "_", "-")
+		key := strings.ToLower(strings.ReplaceAll(kv[0], "_", "-"))
 		value, _ := url.QueryUnescape(kv[1])
 
 		switch key {
@@ -1408,6 +1419,195 @@ func parseWireGuardURL(uri string) (map[string]any, error) {
 	return node, nil
 }
 
+// parseHTTPURL parses http:// or https:// proxy URL
+func parseHTTPURL(uri string) (map[string]any, error) {
+	isTLS := strings.HasPrefix(uri, "https://")
+	content := uri
+	if isTLS {
+		content = strings.TrimPrefix(uri, "https://")
+	} else {
+		content = strings.TrimPrefix(uri, "http://")
+	}
+
+	name := ""
+	mainPart := content
+
+	if idx := strings.LastIndex(content, "#"); idx != -1 {
+		mainPart = content[:idx]
+		name, _ = url.QueryUnescape(content[idx+1:])
+	}
+
+	if idx := strings.Index(mainPart, "?"); idx != -1 {
+		mainPart = mainPart[:idx]
+	}
+
+	var username, password string
+	var serverPart string
+
+	if atIdx := strings.LastIndex(mainPart, "@"); atIdx != -1 {
+		authPart := mainPart[:atIdx]
+		serverPart = mainPart[atIdx+1:]
+		if colonIdx := strings.Index(authPart, ":"); colonIdx != -1 {
+			username, _ = url.QueryUnescape(authPart[:colonIdx])
+			password, _ = url.QueryUnescape(authPart[colonIdx+1:])
+		} else {
+			username, _ = url.QueryUnescape(authPart)
+		}
+	} else {
+		serverPart = mainPart
+	}
+
+	defaultPort := 80
+	if isTLS {
+		defaultPort = 443
+	}
+	server, port := parseServerPortWithDefault(serverPart, defaultPort)
+
+	if name == "" {
+		name = fmt.Sprintf("%s:%d", server, port)
+	}
+
+	node := map[string]any{
+		"name":     name,
+		"type":     "http",
+		"server":   server,
+		"port":     port,
+		"username": username,
+		"password": password,
+	}
+	if isTLS {
+		node["tls"] = true
+	}
+	return node, nil
+}
+
+// parseNaiveURL parses naive+https:// or naive:// URL
+func parseNaiveURL(uri string) (map[string]any, error) {
+	content := regexp.MustCompile(`^naive(\+https?)?://`).ReplaceAllString(uri, "")
+	name := "Naive Node"
+	mainPart := content
+
+	if idx := strings.LastIndex(content, "#"); idx != -1 {
+		mainPart = content[:idx]
+		name, _ = url.QueryUnescape(content[idx+1:])
+	}
+
+	var queryParams map[string]string
+	if idx := strings.Index(mainPart, "?"); idx != -1 {
+		queryParams = parseQueryParams(mainPart[idx+1:])
+		mainPart = mainPart[:idx]
+	}
+	mainPart = strings.TrimSuffix(mainPart, "/")
+
+	atIdx := strings.LastIndex(mainPart, "@")
+	if atIdx == -1 {
+		return nil, fmt.Errorf("invalid naive url: missing @")
+	}
+
+	authPart := mainPart[:atIdx]
+	serverPart := mainPart[atIdx+1:]
+	server, port := parseServerPortWithDefault(serverPart, 443)
+
+	var username, password string
+	if colonIdx := strings.Index(authPart, ":"); colonIdx != -1 {
+		username, _ = url.QueryUnescape(authPart[:colonIdx])
+		password, _ = url.QueryUnescape(authPart[colonIdx+1:])
+	} else {
+		username, _ = url.QueryUnescape(authPart)
+	}
+
+	node := map[string]any{
+		"name":     name,
+		"type":     "naive",
+		"server":   server,
+		"port":     port,
+		"username": username,
+		"password": password,
+	}
+
+	if sni := queryParams["sni"]; sni != "" {
+		node["sni"] = safeDecodeURIComponent(sni)
+	}
+	if queryParams["uot"] == "1" {
+		node["udp-over-tcp"] = true
+	}
+
+	return node, nil
+}
+
+// parseMieruURL parses mieru:// URL
+func parseMieruURL(uri string) (map[string]any, error) {
+	content := strings.TrimPrefix(uri, "mieru://")
+	name := "Mieru Node"
+	mainPart := content
+
+	if idx := strings.LastIndex(content, "#"); idx != -1 {
+		mainPart = content[:idx]
+		name, _ = url.QueryUnescape(content[idx+1:])
+	}
+
+	var queryParams map[string]string
+	if idx := strings.Index(mainPart, "?"); idx != -1 {
+		queryParams = parseQueryParams(mainPart[idx+1:])
+		mainPart = mainPart[:idx]
+	}
+	mainPart = strings.TrimSuffix(mainPart, "/")
+
+	atIdx := strings.LastIndex(mainPart, "@")
+	if atIdx == -1 {
+		return nil, fmt.Errorf("invalid mieru url: missing @")
+	}
+
+	authPart, _ := url.QueryUnescape(mainPart[:atIdx])
+	serverPart := mainPart[atIdx+1:]
+	server, port := parseServerPortWithDefault(serverPart, 0)
+
+	var username, password string
+	if colonIdx := strings.Index(authPart, ":"); colonIdx != -1 {
+		username = authPart[:colonIdx]
+		password = authPart[colonIdx+1:]
+	} else {
+		username = authPart
+	}
+
+	node := map[string]any{
+		"name":     name,
+		"type":     "mieru",
+		"server":   server,
+		"port":     port,
+		"username": username,
+		"password": password,
+	}
+
+	if v := queryParams["transport"]; v != "" {
+		node["transport"] = v
+	} else if v := queryParams["handshake-mode"]; v != "" {
+		node["transport"] = v
+	} else {
+		node["transport"] = "TCP"
+	}
+
+	if v := queryParams["multiplexing"]; v != "" {
+		node["multiplexing"] = v
+	} else {
+		node["multiplexing"] = "MULTIPLEXING_LOW"
+	}
+
+	if v := queryParams["mtu"]; v != "" {
+		if mtu, err := strconv.Atoi(v); err == nil {
+			node["mtu"] = mtu
+		}
+	}
+	if v := queryParams["port-range"]; v != "" {
+		node["port-range"] = v
+	}
+	if v := queryParams["traffic-pattern"]; v != "" {
+		node["traffic-pattern"] = v
+	}
+
+	return node, nil
+}
+
 // ParseProxyURL parses a single proxy URL and returns Clash format
 func ParseProxyURL(uri string) (map[string]any, error) {
 	uri = strings.TrimSpace(uri)
@@ -1437,6 +1637,12 @@ func ParseProxyURL(uri string) (map[string]any, error) {
 		return parseSnellURL(uri)
 	case strings.HasPrefix(uri, "wireguard://"), strings.HasPrefix(uri, "wg://"):
 		return parseWireGuardURL(uri)
+	case strings.HasPrefix(uri, "http://"), strings.HasPrefix(uri, "https://"):
+		return parseHTTPURL(uri)
+	case strings.HasPrefix(uri, "naive://"), strings.HasPrefix(uri, "naive+https://"), strings.HasPrefix(uri, "naive+http://"):
+		return parseNaiveURL(uri)
+	case strings.HasPrefix(uri, "mieru://"):
+		return parseMieruURL(uri)
 	default:
 		return nil, fmt.Errorf("unsupported protocol: %s", uri)
 	}
