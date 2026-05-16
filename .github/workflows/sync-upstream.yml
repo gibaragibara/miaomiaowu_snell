@@ -21,7 +21,7 @@ jobs:
       - name: Add upstream remote
         run: |
           git remote add upstream https://github.com/iluobei/miaomiaowu.git || true
-          git fetch upstream
+          git fetch --no-tags upstream main:refs/remotes/upstream/main
 
       - name: Check for new upstream changes
         id: check
@@ -42,7 +42,57 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git merge upstream/main --no-edit -m "chore: sync upstream $(date +%Y-%m-%d)"
+          if git merge upstream/main --no-edit -m "chore: sync upstream $(date +%Y-%m-%d)"; then
+            exit 0
+          fi
+
+          conflicts=$(git diff --name-only --diff-filter=U)
+          if [ -z "$conflicts" ]; then
+            git status --short
+            exit 1
+          fi
+
+          for conflict in $conflicts; do
+            case "$conflict" in
+              internal/version/version.go|miaomiaowu/src/hooks/use-version-check.ts)
+                ;;
+              *)
+                echo "Unexpected merge conflict: $conflict"
+                git status --short
+                exit 1
+                ;;
+            esac
+          done
+
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          Path("internal/version/version.go").write_text(
+              'package version\n\n// Version is the current application version\nvar Version = "dev"\n'
+          )
+
+          path = Path("miaomiaowu/src/hooks/use-version-check.ts")
+          text = path.read_text()
+          text = re.sub(
+              r"<<<<<<< HEAD\nconst CURRENT_VERSION = 'dev'\n=======\nconst CURRENT_VERSION = '[^']+'\n>>>>>>> upstream/main\n",
+              "const CURRENT_VERSION = 'dev'\n",
+              text,
+          )
+          path.write_text(text)
+          PY
+
+          if grep -n -E '^(<<<<<<<|=======|>>>>>>>)' internal/version/version.go miaomiaowu/src/hooks/use-version-check.ts; then
+            exit 1
+          fi
+
+          git add internal/version/version.go miaomiaowu/src/hooks/use-version-check.ts
+          remaining=$(git diff --name-only --diff-filter=U)
+          if [ -n "$remaining" ]; then
+            echo "$remaining"
+            exit 1
+          fi
+          git commit --no-edit
 
       - name: Push changes
         if: steps.check.outputs.has_updates == 'true'
