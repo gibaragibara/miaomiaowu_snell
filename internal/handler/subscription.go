@@ -667,11 +667,14 @@ func (h *SubscriptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 			if sysCfg, err := h.repo.GetSystemConfig(r.Context()); err == nil && sysCfg.EnableOverrideScripts {
 				selectedScriptIDs := makeIDSet(subscribeFile.SelectedOverrideScriptIDs)
 				scripts, _ := h.repo.ListOverrideScripts(r.Context(), username, "post_fetch")
+				logger.Info("[OverrideScript] 开始执行覆写脚本", "total_scripts", len(scripts), "selected_ids", subscribeFile.SelectedOverrideScriptIDs)
 				for _, s := range scripts {
 					if !s.Enabled {
+						logger.Info("[OverrideScript] 跳过未启用的脚本", "script", s.Name, "id", s.ID)
 						continue
 					}
 					if len(selectedScriptIDs) > 0 && !selectedScriptIDs[s.ID] {
+						logger.Info("[OverrideScript] 跳过未选中的脚本", "script", s.Name, "id", s.ID)
 						continue
 					}
 					modified, err := h.runPostFetchScript(r.Context(), s.Content, data)
@@ -679,10 +682,15 @@ func (h *SubscriptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 						logger.Info("[OverrideScript] post_fetch 脚本执行失败", "script", s.Name, "error", err)
 						continue
 					}
+					logger.Info("[OverrideScript] post_fetch 脚本执行成功", "script", s.Name, "id", s.ID, "input_bytes", len(data), "output_bytes", len(modified))
 					data = modified
 				}
+			} else {
+				logger.Info("[OverrideScript] 覆写脚本功能未启用", "enable_override_scripts", sysCfg.EnableOverrideScripts, "err", err)
 			}
 		}
+	} else if hasSubscribeFile {
+		logger.Info("[OverrideScript] 订阅文件未开启自动应用", "auto_sync_custom_rules", subscribeFile.AutoSyncCustomRules)
 	}
 	logger.Info("[⏱️ 耗时监测] 覆写脚本执行完成", "step", "override_script", "duration_ms", time.Since(stepStart).Milliseconds())
 

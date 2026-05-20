@@ -31,7 +31,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { Copy } from 'lucide-react'
-import { Upload, Download, Edit, Settings, FileText, Save, Trash2, RefreshCw, ChevronDown, ChevronUp, ExternalLink, Eye, Calendar as CalendarIcon, Plus, Check, Ban } from 'lucide-react'
+import { Upload, Download, Edit, Settings, FileText, Save, Trash2, RefreshCw, ChevronDown, ChevronUp, ExternalLink, Eye, Calendar as CalendarIcon, Plus, Check, Ban, Info, Clock } from 'lucide-react'
 import { EditNodesDialog } from '@/components/edit-nodes-dialog'
 import { MobileEditNodesDialog } from '@/components/mobile-edit-nodes-dialog'
 import { Twemoji } from '@/components/twemoji'
@@ -2648,31 +2648,18 @@ function SubscribeFilesPage() {
                     ),
                   },
                   {
-                    header: '说明',
+                    header: '',
                     cell: (file) => file.description ? (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <span className='text-sm text-muted-foreground truncate block cursor-help'>
-                            {file.description}
-                          </span>
+                          <Info className='h-4 w-4 text-muted-foreground cursor-help' />
                         </TooltipTrigger>
                         <TooltipContent className='max-w-xs'>
                           {file.description}
                         </TooltipContent>
                       </Tooltip>
-                    ) : (
-                      <span className='text-sm text-muted-foreground'>-</span>
-                    ),
-                    cellClassName: 'max-w-[200px]'
-                  },
-                  {
-                    header: '最后更新',
-                    cell: (file) => (
-                      <span className='text-sm text-muted-foreground whitespace-nowrap'>
-                        {file.updated_at ? dateFormatter.format(new Date(file.updated_at)) : '-'}
-                      </span>
-                    ),
-                    width: '160px'
+                    ) : null,
+                    width: '36px'
                   },
                   {
                     header: '过期时间',
@@ -2908,10 +2895,12 @@ function SubscribeFilesPage() {
                                         size="sm"
                                         className={cn("justify-start text-xs h-8", isSelected && "bg-accent")}
                                         onClick={() => {
-                                          if (!isEnabled) return
                                           let newRuleIds: number[]
                                           let newScriptIds: number[]
-                                          if (totalSelected === 0) {
+                                          if (!isEnabled) {
+                                            newRuleIds = [rule.id]
+                                            newScriptIds = []
+                                          } else if (totalSelected === 0) {
                                             newRuleIds = enabledCustomRules.filter(r => r.id !== rule.id).map(r => r.id)
                                             newScriptIds = enabledOverrideScripts.map(s => s.id)
                                           } else {
@@ -2922,7 +2911,7 @@ function SubscribeFilesPage() {
                                             newRuleIds = []
                                             newScriptIds = []
                                           }
-                                          const allEmpty = newRuleIds.length === 0 && newScriptIds.length === 0 && totalSelected > 0
+                                          const allEmpty = newRuleIds.length === 0 && newScriptIds.length === 0
                                           updateMetadataMutation.mutate({
                                             id: file.id,
                                             data: {
@@ -2955,10 +2944,12 @@ function SubscribeFilesPage() {
                                         size="sm"
                                         className={cn("justify-start text-xs h-8", isSelected && "bg-accent")}
                                         onClick={() => {
-                                          if (!isEnabled) return
                                           let newScriptIds: number[]
                                           let newRuleIds: number[]
-                                          if (totalSelected === 0) {
+                                          if (!isEnabled) {
+                                            newScriptIds = [script.id]
+                                            newRuleIds = []
+                                          } else if (totalSelected === 0) {
                                             newScriptIds = enabledOverrideScripts.filter(s => s.id !== script.id).map(s => s.id)
                                             newRuleIds = enabledCustomRules.map(r => r.id)
                                           } else {
@@ -2969,7 +2960,7 @@ function SubscribeFilesPage() {
                                             newRuleIds = []
                                             newScriptIds = []
                                           }
-                                          const allEmpty = newRuleIds.length === 0 && newScriptIds.length === 0 && totalSelected > 0
+                                          const allEmpty = newRuleIds.length === 0 && newScriptIds.length === 0
                                           updateMetadataMutation.mutate({
                                             id: file.id,
                                             data: {
@@ -3415,6 +3406,20 @@ function SubscribeFilesPage() {
                     headerClassName: 'text-center',
                     cellClassName: 'text-center',
                     width: '110px',
+                  },
+                  {
+                    header: '',
+                    cell: (file) => file.updated_at ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Clock className='h-4 w-4 text-muted-foreground cursor-help' />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {dateFormatter.format(new Date(file.updated_at))}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : null,
+                    width: '36px'
                   },
                   {
                     header: '操作',
